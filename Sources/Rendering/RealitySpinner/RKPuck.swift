@@ -46,27 +46,12 @@ struct RKPartDef { var mesh: MeshResource; var kind: MatKind; var group: Int }
 struct RKPuckTextures {
     var face: TextureResource, faceRough: TextureResource, faceNormal: TextureResource, faceEmi: TextureResource
     var sFace: TextureResource, sFaceRough: TextureResource, sFaceNormal: TextureResource, sFaceEmi: TextureResource
-    /// One hub dome's texture sets: the lit finish (color/emissive/normal) and the raised finish
-    /// (grey ramp color, roughness, normal). Both are always resident so switching finish is a material swap.
-    struct Hub {
-        var color: TextureResource, emissive: TextureResource, normal: TextureResource
-        var raisedColor: TextureResource, raisedRough: TextureResource, raisedNormal: TextureResource
-    }
-    var hubs: [Hub]
     var webOpacity: TextureResource
     var arcEmi: [TextureResource], arcAlpha: TextureResource
 
     static func make(_ im: RKImages, step: @MainActor () async -> Void = {}) async throws -> RKPuckTextures {
         func gen(_ i: CGImage, _ s: TextureResource.Semantic) async throws -> TextureResource {
             let r = try await TextureResource(image: i, options: .init(semantic: s))
-            await step()
-            return r
-        }
-        // Hub marks are fine, high-contrast detail: no lossy compression, and a full mip chain so the mark stays clean
-        // when small or tilted (trilinear filtering through the mips).
-        func genHub(_ i: CGImage, _ s: TextureResource.Semantic) async throws -> TextureResource {
-            let options = TextureResource.CreateOptions(semantic: s, compression: .none, mipmapsMode: .allocateAndGenerateAll)
-            let r = try await TextureResource(image: i, options: options)
             await step()
             return r
         }
@@ -80,25 +65,13 @@ struct RKPuckTextures {
         let sFaceRough: TextureResource = try await gen(sm.rough, .scalar)
         let sFaceNormal: TextureResource = try await gen(sm.normal, .normal)
         let sFaceEmi: TextureResource = try await gen(sm.emissive, emi)
-        var hubs: [Hub] = []
-        for h in im.hubs {
-            let hh = h!
-            let hubColor: TextureResource = try await genHub(hh.color, .color)
-            let hubEmissive: TextureResource = try await genHub(hh.emissive, emi)
-            let hubNormal: TextureResource = try await genHub(hh.normal, .normal)
-            let hubRaisedColor: TextureResource = try await genHub(hh.raisedColor, .color)
-            let hubRaisedRough: TextureResource = try await genHub(hh.raisedRough, .scalar)
-            let hubRaisedNormal: TextureResource = try await genHub(hh.raisedNormal, .normal)
-            hubs.append(Hub(color: hubColor, emissive: hubEmissive, normal: hubNormal,
-                            raisedColor: hubRaisedColor, raisedRough: hubRaisedRough, raisedNormal: hubRaisedNormal))
-        }
         let web = try await gen(im.webOpacity, PhysicallyBasedMaterial.Opacity.textureSemantic)
         var arcEmi: [TextureResource] = []
         for c in im.arcEmissive { arcEmi.append(try await gen(c, emi)) }
         let arcAlpha = try await gen(im.arcAlpha, PhysicallyBasedMaterial.Opacity.textureSemantic)
         return RKPuckTextures(face: face, faceRough: faceRough, faceNormal: faceNormal, faceEmi: faceEmi,
                               sFace: sFace, sFaceRough: sFaceRough, sFaceNormal: sFaceNormal, sFaceEmi: sFaceEmi,
-                              hubs: hubs, webOpacity: web, arcEmi: arcEmi, arcAlpha: arcAlpha)
+                              webOpacity: web, arcEmi: arcEmi, arcAlpha: arcAlpha)
     }
 }
 
@@ -109,6 +82,25 @@ func lin(_ c: V3) -> NSColor {
     let blue: CGFloat = CGFloat(srgbEncode(c.z))
     return NSColor(srgbRed: red, green: green, blue: blue, alpha: 1)
 }
+
+
+// ---- hub mark material constants (linear values) ----
+let hubRaisedFloor: Float = 0.07          // level of the plain hub face in the raised finish (times the pale tint)
+let engravedFaceLin: Float = 0.80
+let engravedFloorLin: Float = 0.03
+let engravedWallLin: Float = 1.0
+let engravedFaceRough: Float = 0.12
+let engravedFloorRough: Float = 0.65
+let engravedWallRough: Float = 0.30
+let hubGlowColor: V3 = V3(0.30, 0.75, 1.0)
+/// Glow gain of a piece's tone level (the sign-off mark's dash, pair and "e").
+let hubToneGain: [Float] = [0.45, 0.75, 1.0]
+/// Top tone of a raised piece's level.
+let hubToneLevels: [Float] = [0.6, 0.8, 1.0]
+/// Share of the floor's glow the cut wall's emission carries (lit finish).
+var hubWallGlowFraction: Float = 0.30
+/// How much darker the raised mark's wall is than its top.
+let hubRaisedWallDarkening: Float = 0.55
 
 struct RKMetal { var name: String; var f0: V3 }
 let rkMetals: [String: RKMetal] = {
@@ -134,7 +126,7 @@ struct RKTuning {
     var useAniso = true
     var useNormalMaps = true
     var glass = true
-    var hubFinish = 0        // SpinnerHubFinish index: 0 lit, 1 raised
+    var hubFinish = 0        // SpinnerHubFinish index: 0 lit, 1 raised, 2 engraved
     var glow: Float = 1      // multiplier on every emissive intensity (SpinnerSettings.glowBrightness)
 }
 
@@ -146,6 +138,14 @@ func raisedTint(_ f0: V3) -> V3 {
     let desaturated: V3 = f0 + (grey - f0) * 0.12
     let toWhite: V3 = V3(1, 1, 1) - desaturated
     let lightened: V3 = desaturated + toWhite * 0.5
+    return simd_min(lightened, V3(repeating: 0.95))
+}
+
+/// Face tint of the engraved hub: the body metal lightened part of the way (less than `raisedTint`), so the polished face
+/// stays a metal of the same family while the matte floor stays clearly darker, in every metal including black zirconium.
+func engravedTint(_ f0: V3) -> V3 {
+    let toWhite: V3 = V3(1, 1, 1) - f0
+    let lightened: V3 = f0 + toWhite * 0.60
     return simd_min(lightened, V3(repeating: 0.95))
 }
 
@@ -192,20 +192,47 @@ func makeMaterial(_ k: MatKind, metal: RKMetal, tex: RKPuckTextures, tune: RKTun
     case .stepWall:
         m.baseColor = steel(V3(0.25, 0.25, 0.25)); m.metallic = 1.0; m.roughness = 0.42
     case .hubDomeF, .hubDomeB:
-        // The marks are fixed: the interlocked mark on the front dome (hubs[0]), the sign-off mark on the back (hubs[1]).
-        let back: Bool = (k == .hubDomeB)
-        let h = tex.hubs[back ? 1 : 0]
+        // The hub face outside the mark: a plain polished disc, no texture (the marks are real geometry). Dark in the lit
+        // and raised finishes (the raised tint multiplies the old texture's top level), a light metal in the engraved one.
         if tune.hubFinish == 1 {
-            // Raised finish: no emission; a dark polished hub top with the mark as a low relief. The texture carries the
-            // top-face tone (and contact shadow); the pale metal tint multiplies it.
-            m.baseColor = .init(tint: lin(raisedTint(metal.f0)), texture: T(h.raisedColor)); m.metallic = 1.0
-            m.roughness = .init(scale: 1.0, texture: T(h.raisedRough))
-            if tune.useNormalMaps { m.normal = .init(texture: T(h.raisedNormal)) }
+            let level: V3 = raisedTint(metal.f0) * hubRaisedFloor
+            m.baseColor = .init(tint: lin(level)); m.metallic = 1.0; m.roughness = 0.10
+        } else if tune.hubFinish == 2 {
+            let level: V3 = engravedTint(metal.f0) * engravedFaceLin
+            m.baseColor = .init(tint: lin(level)); m.metallic = 1.0; m.roughness = .init(floatLiteral: engravedFaceRough)
         } else {
-            m.baseColor = .init(tint: .white, texture: T(h.color)); m.metallic = 1.0; m.roughness = 0.10
-            m.emissiveColor = .init(texture: T(h.emissive)); m.emissiveIntensity = tune.markEmissive * tune.glow
-            if tune.useNormalMaps { m.normal = .init(texture: T(h.normal)) }
+            m.baseColor = .init(tint: lin(V3(0.05, 0.052, 0.058))); m.metallic = 1.0; m.roughness = 0.10
         }
+    case .hubFloor(let level):
+        if tune.hubFinish == 2 {
+            // Engraved: unlit, a dark matte floor.
+            let floorLevel: V3 = engravedTint(metal.f0) * engravedFloorLin
+            m.baseColor = .init(tint: lin(floorLevel)); m.metallic = 1.0; m.roughness = .init(floatLiteral: engravedFloorRough)
+        } else {
+            // Lit: the channel floor glows with the mark colour, scaled by the piece's tone.
+            let glowColor: V3 = hubGlowColor * hubToneGain[level]
+            m.baseColor = .init(tint: lin(V3(0.008, 0.010, 0.014))); m.metallic = 1.0; m.roughness = 0.5
+            m.emissiveColor = .init(color: lin(glowColor)); m.emissiveIntensity = tune.markEmissive * tune.glow
+        }
+    case .hubCutWall(let level):
+        if tune.hubFinish == 2 {
+            // Engraved: a lighter, glossier metal wall shaded by the real lights.
+            let wallLevel: V3 = engravedTint(metal.f0) * engravedWallLin
+            m.baseColor = .init(tint: lin(wallLevel)); m.metallic = 1.0; m.roughness = .init(floatLiteral: engravedWallRough)
+        } else {
+            // Lit: a dark metal wall that carries a fraction of the floor's glow, so it reads as lit by the floor.
+            let wallGlow: V3 = hubGlowColor * hubToneGain[level] * hubWallGlowFraction
+            m.baseColor = .init(tint: lin(V3(0.03, 0.032, 0.036))); m.metallic = 1.0; m.roughness = 0.38
+            m.emissiveColor = .init(color: lin(wallGlow)); m.emissiveIntensity = tune.markEmissive * tune.glow
+        }
+    case .hubTop(let level):
+        let tone: Float = hubToneLevels[level]
+        let topLevel: V3 = raisedTint(metal.f0) * tone
+        m.baseColor = .init(tint: lin(topLevel)); m.metallic = 1.0; m.roughness = 0.40
+    case .hubTopWall(let level):
+        let tone: Float = hubToneLevels[level]
+        let wallLevel: V3 = raisedTint(metal.f0) * (tone * hubRaisedWallDarkening)
+        m.baseColor = .init(tint: lin(wallLevel)); m.metallic = 1.0; m.roughness = 0.34
     case .hubChamfer:
         m.baseColor = steel(V3(0.6, 0.6, 0.6)); m.metallic = 1.0; m.roughness = 0.14
     case .hubWall:

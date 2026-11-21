@@ -101,7 +101,7 @@ struct SpinnerSettingsSections: View {
                 Text("\(degrees)\u{00B0}").tag(degrees)
             }
         }
-        .help("How far the t / y keys (and Shift+t / Shift+y) turn the disc per press. 15 degrees gives 24 stops per turn.")
+        .help("How far the t / y keys (and Shift+t / Shift+y, Option+t) turn the disc per press, and per repeat while held. 15 degrees gives 24 stops per turn.")
         .resettable(profile: \.spinner.rotationStepDegrees, model, fanOut: false)
     }
 
@@ -134,7 +134,7 @@ struct SpinnerSettingsSections: View {
                 Text(finish.displayName).tag(finish)
             }
         }
-        .help("Lit: the hub marks are cut in as glowing channels. Raised: plain hub, marks standing proud (key c). Both renderers.")
+        .help("Lit: the hub marks are cut in as glowing channels. Raised: plain hub, marks standing proud. Engraved: unlit, marks laser-cut into the polished hub as dark matte channels (key c cycles). Both renderers.")
         .resettable(profile: \.spinner.hubFinish, model, fanOut: false)
     }
 
@@ -247,7 +247,7 @@ struct SpinnerSettingsSections: View {
         Section("Renderer") {
             rendererRow
             Button("Reset orientation") { model.resetSpinnerOrientation() }
-                .help("Eases the disc back to face-on (key 0). Orientation is not saved.")
+                .help("Eases the disc back to face-on. The 0 key does the same, and flips to the other side when the disc is already face-on (Option+0 flips about the vertical axis). Orientation is not saved.")
         }
     }
 

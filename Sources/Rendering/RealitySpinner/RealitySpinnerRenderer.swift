@@ -87,7 +87,7 @@ final class RealitySpinnerRenderer {
     var currentMark = -1
     var currentGlow: Float = -1
     var curRoll = Float.nan, curRoom = Float(-1), curShadowDistance = Float(-1)
-    /// The two hub dome entities: rolled about the puck axis each frame so the marks read upright.
+    /// Every hub entity (face, cut, raised mark, chamfer, wall): rolled together about the puck axis each frame so the marks read upright.
     var domeEntities: [ModelEntity] = []
     let camDist: Float = 8.6
     let groundZ: Float = -1.12
@@ -186,11 +186,12 @@ final class RealitySpinnerRenderer {
                 }
                 if case .rodCore = p.kind { e.components.set(ModelSortGroupComponent(group: sort, order: -2)) }
                 if case .rodShell = p.kind { e.components.set(ModelSortGroupComponent(group: sort, order: -1)) }
-            case 1: hub.addChild(e)
+            case 1:
+                hub.addChild(e)
+                domeEntities.append(e)
             default: gOv.addChild(e); e.components.set(ModelSortGroupComponent(group: sort, order: 0))
             }
             partEntities.append((e, p.kind))
-            if p.kind == .hubDomeF || p.kind == .hubDomeB { domeEntities.append(e) }
             await maybeYield()
         }
         lap("part meshes")
@@ -257,9 +258,9 @@ final class RealitySpinnerRenderer {
     // ------------------------------------------------------------------------------------------
     static let metalNames = ["steel", "brass", "copper", "zirconium", "titanium"]
     /// Rebuilds materials when the metal, the hub finish or the glow brightness changes. A metal or glow change rebuilds
-    /// every material (the raised mark's pale tint derives from the body metal; glow scales every emissive intensity); a
-    /// finish change rebuilds only the two hub domes. The textures are already resident, so none of this regenerates
-    /// anything. Glow is quantized to 1/40 so a slider drag does not rebuild on every tick.
+    /// every material (the hub tints derive from the body metal; glow scales every emissive intensity); a finish change
+    /// rebuilds only the hub's face and mark meshes and switches which mark meshes are shown. All meshes exist from setup,
+    /// so none of this regenerates anything. Glow is quantized to 1/40 so a slider drag does not rebuild on every tick.
     func applyMaterials(metal: Int, finish: Int, glow: Float) {
         let mi = min(max(metal, 0), Self.metalNames.count - 1)
         let quantized: Float = (min(max(glow, 0), 2) * 40).rounded() / 40
@@ -270,12 +271,26 @@ final class RealitySpinnerRenderer {
         let hubOnly: Bool = (mi == currentMetal && quantized == currentGlow)
         var cache: [MatKind: PhysicallyBasedMaterial] = [:]
         for (e, k) in partEntities {
-            if hubOnly, !(k == .hubDomeF || k == .hubDomeB) { continue }   // only the hub changes with the finish
+            if hubOnly, !Self.isFinishDependent(k) { continue }   // only the hub's marks change with the finish
             if cache[k] == nil { cache[k] = makeMaterial(k, metal: m, tex: tex, tune: tune) }
             e.model?.materials = [cache[k]!]
+            // The cut channel (lit, engraved) and the raised mark are separate meshes: show the one the finish needs.
+            switch k {
+            case .hubFloor, .hubCutWall: e.isEnabled = (finish != 1)
+            case .hubTop, .hubTopWall: e.isEnabled = (finish == 1)
+            default: break
+            }
         }
         if quantized != currentGlow { rebuildArcMaterials() }
         currentMetal = mi; currentMark = finish; currentGlow = quantized
+    }
+
+    /// Hub parts whose material depends on the finish (the plain face and the cut / raised mark meshes).
+    static func isFinishDependent(_ k: MatKind) -> Bool {
+        switch k {
+        case .hubDomeF, .hubDomeB, .hubFloor, .hubCutWall, .hubTop, .hubTopWall: return true
+        default: return false
+        }
     }
 
     /// Arc ribbon materials carry the glow multiplier in their emissive intensity.

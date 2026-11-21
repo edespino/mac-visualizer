@@ -346,6 +346,16 @@ final class RenderModel: ObservableObject {
         SpinnerInput.shared.pendingOrientation.reset = true
     }
 
+    /// Key `0`: resets the orientation, or flips to the other face when the target is already face-on.
+    func resetOrFlipSpinnerOrientation() {
+        SpinnerInput.shared.pendingOrientation.resetOrFlip = true
+    }
+
+    /// Option+`0`: resets the orientation, or flips about the vertical axis when the target is face-on.
+    func resetOrFlipSpinnerYaw() {
+        SpinnerInput.shared.pendingOrientation.resetOrFlipYaw = true
+    }
+
     // MARK: - Hotkey actions (focused-only; also surfaced as menu items)
 
     /// Switch to the next / previous enabled style (wrapping).

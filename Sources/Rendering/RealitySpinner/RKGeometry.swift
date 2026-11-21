@@ -19,6 +19,7 @@ import simd
 
 import simd
 import Foundation
+import MacVisualizerCore
 
 typealias V3 = SIMD3<Float>
 typealias V2 = SIMD2<Float>
@@ -933,7 +934,10 @@ func planarUV(_ m: inout MB, span: Float) {
 // ---- parts ----
 enum MatKind: Hashable {
     case faceBrushed, webSatin, chamfer, wallBand, groove, knurl, plate, cutWall, stepWall
-    case hubDomeF, hubDomeB, hubChamfer, hubWall
+    case hubDomeF, hubDomeB, hubChamfer, hubWall   // hubDomeF/B: the hub face OUTSIDE the mark
+    /// Real-geometry marks (`HubCutMesh`): the cut channel's floor and wall (lit and engraved finishes) and the raised
+    /// mark's top and wall (raised finish), per piece. The Int is the piece's glow/tone level (0 dim, 1 mid, 2 bright).
+    case hubFloor(Int), hubCutWall(Int), hubTop(Int), hubTopWall(Int)
     case pocket(Int), rodCore(Int), rodShell(Int)
     case faceOv, wallOv, webOv
 }
@@ -944,12 +948,14 @@ struct RKPartCPU { var mb: MB; var kind: MatKind; var name: String; var group: I
 struct RKArcPart { var mb: MB; var material: UInt32; var name: String }
 struct RKGeometryCPU {
     var parts: [RKPartCPU] = []
+    /// Hub cut-mesh build timings and triangle counts (name, milliseconds), for the setup log.
+    var hubTimings: [(String, Double)] = []
     var faceArcs: [[RKArcPart]] = [], wallArcs: [[RKArcPart]] = []
 }
 
 /// The whole puck mesh set as plain arrays (no RealityKit). Safe on any thread.
 @_optimize(speed)
-func buildPuckCPU() -> RKGeometryCPU {
+func buildPuckCPU(frontMark: Int = 0) -> RKGeometryCPU {
     var out = RKGeometryCPU()
     @_optimize(speed)
     func add(_ m: MB, _ k: MatKind, _ name: String, hub: Bool = false) {
@@ -1099,31 +1105,108 @@ func buildPuckCPU() -> RKGeometryCPU {
             }
             out.faceArcs.append(fparts); out.wallArcs.append(wparts)
         }
-        // ---- hub (fixed entity) ----
-        func hubSide(_ sgn: Float, _ tag: String) {
-            var dome: [ProfilePt] = []
-            for i in 0...32 {
-                let r: Float = 0.33 * Float(i) / 32
-                let domeScale: Float = 0.33 * 0.33
-                let dz: Float = -2 * D.hubDome * r / domeScale
-                let n: V2 = simd_normalize(V2(-dz, 1))
-                dome.append(ProfilePt(r: r, z: domeZ(r), nr: n.x, nz: n.y))
+        // ---- hub (fixed entity): real-geometry marks ----
+        // The face (outside the mark), the cut channel (floor + wall) and the raised mark (top + wall) are meshes built from
+        // the same stroke lists the classic shader draws (`hubPieces`); the chamfer and wall rings reuse the face's rim
+        // vertices, and every hub part is rolled together about the puck axis (SpinnerHubRoll), so nothing cracks.
+        for back in [false, true] {
+            let tag: String = back ? "B" : "F"
+            let hubStart = DispatchTime.now().uptimeNanoseconds
+            let mark: Int = back ? (1 - frontMark) : frontMark
+            let pieces = hubPieces(mark: mark, backDome: back)
+            var strokes: [HubCutStroke] = []
+            var levels: [Int] = []
+            for (pi, piece) in pieces.enumerated() {
+                levels.append(hubToneLevel(forGain: piece.gain))
+                for st in piece.strokes { strokes.append(HubCutStroke(a: st.a, b: st.b, hw: st.hw, piece: pi)) }
             }
-            let rimZ: Float = domeZ(0.33)
-            let wallTopZ: Float = rimZ - 0.02
-            let cham: [ProfilePt] = [ProfilePt(r: 0.33, z: rimZ, nr: 0.5547, nz: 0.8321), ProfilePt(r: 0.36, z: wallTopZ, nr: 0.5547, nz: 0.8321)]
-            let wallP: [ProfilePt] = [ProfilePt(r: 0.36, z: wallTopZ, nr: 1, nz: 0), ProfilePt(r: 0.36, z: 0, nr: 1, nz: 0)]
-            let f: ([ProfilePt]) -> [ProfilePt] = { (pts: [ProfilePt]) -> [ProfilePt] in sgn > 0 ? pts : mirrorZ(pts) }
-            var dm = lathe(f(dome), seg: 256)
-            planarUV(&dm, span: 0.72)
-            for i in 0..<dm.t.count { dm.t[i] = V3(1, 0, 0); dm.b[i] = simd_normalize(simd_cross(dm.n[i], dm.t[i])) }
-            add(dm, sgn > 0 ? .hubDomeF : .hubDomeB, "dome" + tag, hub: true)
-            add(lathe(f(cham), seg: 256), .hubChamfer, "hcham" + tag, hub: true)
-            add(lathe(f(wallP), seg: 256), .hubWall, "hwall" + tag, hub: true)
+            let hubParams = HubCutParams(rimRadius: 0.33, domeTop: D.hubTop, domeDrop: D.hubDome, cell: hubCutCell, rings: 6)
+            let field = HubCutField(strokes: strokes, params: hubParams)
+            let cut: HubCutMesh = field.mesh(insideDz: -hubCutDepth, mirrorZ: back)
+            let raised: HubCutMesh = field.mesh(insideDz: hubRaiseHeightGeo, mirrorZ: back)
+            let zs: Float = back ? -1 : 1
+            out.parts.append(RKPartCPU(mb: hubPartMB(cut, cut.face), kind: back ? .hubDomeB : .hubDomeF, name: "hubface" + tag, group: 1))
+            for pi in 0..<pieces.count {
+                let lv: Int = levels[pi]
+                add(hubPartMB(cut, cut.floors[pi]), .hubFloor(lv), "hubfloor\(pi)" + tag, hub: true)
+                add(hubPartMB(cut, cut.walls[pi]), .hubCutWall(lv), "hubcutwall\(pi)" + tag, hub: true)
+                add(hubPartMB(raised, raised.floors[pi]), .hubTop(lv), "hubtop\(pi)" + tag, hub: true)
+                add(hubPartMB(raised, raised.walls[pi]), .hubTopWall(lv), "hubtopwall\(pi)" + tag, hub: true)
+            }
+            let rimMeshes = hubRimMeshes(rim: cut.rim, rimZ: cut.rimZ, zs: zs)
+            add(rimMeshes.chamfer, .hubChamfer, "hcham" + tag, hub: true)
+            add(rimMeshes.wall, .hubWall, "hwall" + tag, hub: true)
+            let hubMs: Double = Double(DispatchTime.now().uptimeNanoseconds - hubStart) / 1e6
+            let tris: Int = cut.triangleCount + raised.triangleCount - raised.face.count / 3
+            out.hubTimings.append(("hub cut meshes " + tag + " (\(tris) triangles)", hubMs))
         }
-        hubSide(1, "F"); hubSide(-1, "B")
 
     return out
+}
+
+
+// ---- real-geometry hub marks: constants and conversion ----
+/// Depth of the cut channel (lit and engraved finishes) in R units: about 4.2% of the hub radius (0.33). Deep enough that the
+/// wall reads and the mark stays legible, shallow enough that the floor is not hidden at 45 degrees of pitch.
+var hubCutDepth: Float = 0.014
+/// Height of the raised mark above the hub face in R units (2.5% of the hub radius).
+var hubRaiseHeightGeo: Float = 0.008
+/// Grid cell of the hub mark meshing (R units; a stroke is 6 to 8 cells wide).
+var hubCutCell: Float = 0.0033
+
+/// Tone level of a piece from its authored gain (0.45 / 0.75 / 1.0 -> 0 / 1 / 2).
+func hubToneLevel(forGain gain: Float) -> Int {
+    if gain < 0.6 { return 0 }
+    if gain < 0.9 { return 1 }
+    return 2
+}
+
+/// Compact MB (own vertices, planar uv over the 0.72 hub span, robust tangent frame) for one triangle list of a hub mesh.
+@_optimize(speed)
+func hubPartMB(_ mesh: HubCutMesh, _ indices: [UInt32]) -> MB {
+    var m = MB()
+    if indices.isEmpty { return m }
+    var remap = [Int32](repeating: -1, count: mesh.positions.count)
+    for idx in indices {
+        let k: Int = Int(idx)
+        if remap[k] < 0 {
+            let pos: V3 = mesh.positions[k]
+            let nor: V3 = mesh.normals[k]
+            let tan: V3 = abs(nor.x) > 0.9 ? V3(0, 1, 0) : V3(1, 0, 0)
+            let uvCoord = V2(pos.x / 0.72 + 0.5, pos.y / 0.72 + 0.5)
+            remap[k] = Int32(m.v(pos, nor, uvCoord, tan: tan))
+        }
+        m.idx.append(UInt32(remap[k]))
+    }
+    return m
+}
+
+/// Chamfer and side wall rings of a hub, built on the face's rim points so the three meet vertex to vertex.
+@_optimize(speed)
+func hubRimMeshes(rim: [SIMD2<Float>], rimZ: Float, zs: Float) -> (chamfer: MB, wall: MB) {
+    let outerScale: Float = D.hubR / 0.33
+    let wallTopZ: Float = (rimZ * zs - 0.02) * zs
+    var chamfer = MB()
+    var wall = MB()
+    var chTop: [UInt32] = [], chBot: [UInt32] = [], wlTop: [UInt32] = [], wlBot: [UInt32] = []
+    for q in rim {
+        let dir: V2 = q / 0.33
+        let tangent = V3(-dir.y, dir.x, 0)
+        let chamferNormal: V3 = simd_normalize(V3(0.5547 * dir.x, 0.5547 * dir.y, 0.8321 * zs))
+        let wallNormal: V3 = simd_normalize(V3(dir.x, dir.y, 0))
+        let outer = V2(q.x * outerScale, q.y * outerScale)
+        chTop.append(chamfer.v(V3(q.x, q.y, rimZ), chamferNormal, V2(0, 0), tan: tangent))
+        chBot.append(chamfer.v(V3(outer.x, outer.y, wallTopZ), chamferNormal, V2(0, 1), tan: tangent))
+        wlTop.append(wall.v(V3(outer.x, outer.y, wallTopZ), wallNormal, V2(0, 0), tan: tangent))
+        wlBot.append(wall.v(V3(outer.x, outer.y, 0), wallNormal, V2(0, 1), tan: tangent))
+    }
+    let n: Int = rim.count
+    for j in 0..<n {
+        let k: Int = (j + 1) % n
+        chamfer.quad(chTop[j], chTop[k], chBot[k], chBot[j])
+        wall.quad(wlTop[j], wlTop[k], wlBot[k], wlBot[j])
+    }
+    return (chamfer, wall)
 }
 
 // ---- marks (design coordinates of the original 200x200 sketch -> hub-local coordinates) ----

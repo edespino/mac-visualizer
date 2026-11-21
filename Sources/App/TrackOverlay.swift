@@ -71,6 +71,23 @@ struct TrackOverlay: View {
     /// How much the card grows on hover, to read the art/title/performer — capped so
     /// the grown card never spills past the opposite window edge. Tunable.
     private let hoverScale: Double = 2.5
+    /// The hidden rest-size card's frame in window (global) space, from `TrackOverlayRectKey`.
+    @State private var restRect: CGRect = .zero
+
+    /// The card's hit rect: the rest rect scaled by `scale` about the overlay corner, or nil when no
+    /// visible card is shown (nothing displayed, or faded out).
+    private func publishedRect(scale: Double) -> CGRect? {
+        guard let shown = displayedTrack, !shown.isEmpty, level > 0.05, restRect.width > 0 else { return nil }
+        let s: CGFloat = CGFloat(scale)
+        let w: CGFloat = restRect.width * s
+        let h: CGFloat = restRect.height * s
+        let corner: OverlayCorner = settings.overlayPosition
+        let leading: Bool = corner == .topLeading || corner == .bottomLeading
+        let top: Bool = corner == .topLeading || corner == .topTrailing
+        let x: CGFloat = leading ? restRect.minX : restRect.maxX - w
+        let y: CGFloat = top ? restRect.minY : restRect.maxY - h
+        return CGRect(x: x, y: y, width: w, height: h)
+    }
 
     /// Identity of the track to show, or "" when there is nothing to show (no
     /// track, paused/stopped, or the overlay disabled). Drives the fade `.task`.
@@ -112,6 +129,7 @@ struct TrackOverlay: View {
                                     key: TrackOverlayBottomKey.self,
                                     value: g.frame(in: .named(TrackOverlayBottomKey.space)).maxY)
                                 .preference(key: TrackOverlayWidthKey.self, value: g.size.width)
+                                .preference(key: TrackOverlayRectKey.self, value: g.frame(in: .global))
                         }
                     )
                     .overlay(alignment: alignment(settings.overlayPosition)) {
@@ -190,6 +208,11 @@ struct TrackOverlay: View {
             }
         }
         .onPreferenceChange(TrackOverlayWidthKey.self) { cardWidth = $0 }
+        .onPreferenceChange(TrackOverlayRectKey.self) { restRect = $0 }
+        // Publish the card's current on-screen rect (grown by the hover scale about its corner) for the
+        // double-click monitor; nil whenever no visible card is there.
+        .onChange(of: publishedRect(scale: shownScale)) { MainWindow.trackCardRect = $0 }
+        .onDisappear { MainWindow.trackCardRect = nil }
       }
     }
 
@@ -283,24 +306,33 @@ struct TrackOverlay: View {
     }
 
     /// Brings the source player (Spotify / Music) to the foreground. No-op when
-    /// the source is unknown or the app is not installed.
+    /// the source is unknown or the app cannot be located.
     ///
-    /// Activates the already-running player process directly, which never touches
-    /// the app bundle. The old `NSWorkspace.open(appURL)` tripped macOS App
-    /// Management ("MacVisualizer was prevented from modifying apps") — that
-    /// deprecated file-open call, handed an `.app` URL, is treated as opening the
-    /// bundle rather than launching the app. Launch is only a fallback for the rare
-    /// case where the player isn't running, via the proper app-launch API.
+    /// Goes through `NSWorkspace.openApplication(at:configuration:)` with
+    /// `activates = true`, for a running player too: that sends the reopen event, which
+    /// restores a minimized window or reopens a closed one, where
+    /// `NSRunningApplication.activate()` alone only brings the app forward. The URL is
+    /// the running app's bundle URL, else the registered one; `activate()` is the
+    /// fallback when neither is known. The old deprecated `NSWorkspace.open(appURL)`
+    /// tripped macOS App Management ("MacVisualizer was prevented from modifying
+    /// apps"), so it must not be used. One log line per click (bundle id, whether it
+    /// was running, completion error); no track text.
     private func activateSourceApp() {
         guard let bundleID = sourceBundleID else { return }
-        if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
-            running.activate()
+        let running: NSRunningApplication? = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first
+        let wasRunning: Bool = running != nil
+        let url: URL? = running?.bundleURL ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+        guard let url else {
+            Log.window.info("Track card click: bundle=\(bundleID, privacy: .public) running=\(wasRunning, privacy: .public) no app URL, activate() fallback")
+            running?.activate()
             return
         }
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return }
         let config = NSWorkspace.OpenConfiguration()
         config.activates = true
-        NSWorkspace.shared.openApplication(at: url, configuration: config, completionHandler: nil)
+        NSWorkspace.shared.openApplication(at: url, configuration: config) { _, error in
+            let message: String = error.map { String(describing: $0) } ?? "none"
+            Log.window.info("Track card click: bundle=\(bundleID, privacy: .public) running=\(wasRunning, privacy: .public) error=\(message, privacy: .public)")
+        }
     }
 
     /// The card, with every metric and font multiplied by `metric`. `metric: 1` is
@@ -370,6 +402,15 @@ struct TrackOverlayBottomKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
+    }
+}
+
+/// The rest-size card's frame in global (window) space, for the double-click suppression rect.
+struct TrackOverlayRectKey: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next: CGRect = nextValue()
+        if next.width > 0 { value = next }
     }
 }
 

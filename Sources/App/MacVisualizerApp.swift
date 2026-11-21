@@ -40,10 +40,6 @@ enum AppEntry {
             LyricsProbe.run()
             exit(0)
         }
-        if args.contains("--rk-hub-check") {
-            RKHubCheck.run()
-            exit(0)
-        }
         if let idx = args.firstIndex(of: "--render-probe"), idx + 1 < args.count {
             // Positional: --render-probe <path> [style] [renderMode] [glow]
             // `glow` is a flag matched anywhere; the optional renderMode token selects a
@@ -54,6 +50,9 @@ enum AppEntry {
             let glow = args.contains("glow")
             let ok = RenderProbe.run(outputPath: path, style: style, glow: glow, renderMode: renderMode)
             exit(ok ? 0 : 1)
+        }
+        if let idx = args.firstIndex(of: "--acknowledgements-probe"), idx + 1 < args.count {
+            exit(AcknowledgementsProbe.run(outputDirectory: args[idx + 1]) ? 0 : 1)
         }
         MacVisualizerMain.main()
     }
@@ -89,6 +88,9 @@ struct MacVisualizerMain: App {
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                AboutAndAcknowledgementsMenuItems()
+            }
             CommandGroup(replacing: .appSettings) {
                 OpenSettingsMenuItem()
             }
@@ -113,12 +115,12 @@ struct MacVisualizerMain: App {
             CommandMenu("Visualizer") {
                 // Bare-key shortcuts (shown in the titles) are handled by
                 // InputController, not by menu key equivalents.
-                Button("Next Visualization (L)") { model.nextStyle() }
-                Button("Previous Visualization (H)") { model.previousStyle() }
-                Button("Random Visualization (R)") { model.randomizeStyle() }
+                Button("Next Visualization (l)") { model.nextStyle() }
+                Button("Previous Visualization (h)") { model.previousStyle() }
+                Button("Random Visualization (r)") { model.randomizeStyle() }
                 Divider()
-                Button("Next Palette (J)") { model.cyclePalette(by: 1) }
-                Button("Previous Palette (K)") { model.cyclePalette(by: -1) }
+                Button("Next Palette (j)") { model.cyclePalette(by: 1) }
+                Button("Previous Palette (k)") { model.cyclePalette(by: -1) }
                 Button("Random Palette") { model.randomizePalette() }
                 Divider()
                 Button("Play/Pause (Space)") { nowPlaying.togglePlayPause() }
@@ -157,6 +159,12 @@ struct MacVisualizerMain: App {
         Window("Settings", id: "settings") {
             SettingsView(model: model, lyrics: lyrics)
         }
+        .windowResizability(.contentMinSize)
+
+        Window("Acknowledgements", id: "acknowledgements") {
+            AcknowledgementsView()
+        }
+        .defaultSize(width: 720, height: 620)
         .windowResizability(.contentMinSize)
     }
 
@@ -318,7 +326,8 @@ private func configureBorderless(_ window: NSWindow, borderless: Bool, windowBor
     window.standardWindowButton(.zoomButton)?.isHidden = borderless
     // Always movable by dragging anywhere on the window surface, not just the
     // title bar — the preferred default in both normal and borderless mode.
-    window.isMovableByWindowBackground = true
+    // Unless an Option-drag of the Spinner is possible right now (see `InputController.updateWindowLock`).
+    window.isMovableByWindowBackground = !MainWindow.dragLocked
 }
 
 private func configureWindowTransparency(_ window: NSWindow,
@@ -401,7 +410,10 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.15), value: model.cheatSheetVisible)
-        .onAppear { SettingsRouter.shared.openSettingsWindow = { openWindow(id: "settings") } }
+        .onAppear {
+            SettingsRouter.shared.openSettingsWindow = { openWindow(id: "settings") }
+            AcknowledgementsRouter.shared.openWindow = { openWindow(id: "acknowledgements") }
+        }
         .coordinateSpace(name: TrackOverlayBottomKey.space)
         .onPreferenceChange(TrackOverlayBottomKey.self) { trackOverlayBottom = $0 }
         .frame(minWidth: 640, minHeight: 360)

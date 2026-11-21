@@ -5,6 +5,26 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Each released version also has a matching `vX.Y.Z` git tag.
 
+## [0.2.0] - 2026-11-21
+
+### Added
+- **Engraved hub finish** for the Spinner (third finish, after Lit and Raised): unlit, the hub marks are cut into the polished hub as channels with a dark matte floor and light walls, no glow. Choose it in Settings > Spinner > Look > Hub finish or cycle with `c`; it switches instantly in RealityKit. In the classic shader renderer it is a simpler dark channel with a wall shadow, and in black zirconium and titanium the polished face is dim, so the cut reads mainly through its edges.
+- **Spinner keys**: `Option+t` / `Option+Shift+t` yaw right / left (the same as `y` / `Shift+y`), and `Option+0` flips the disc about the vertical axis (see Changed for `0`). The cheat sheet (`?`) lists them with lowercase key names.
+- **Acknowledgements window** (MacVisualizer > Acknowledgements…, or right-click the visualization > Acknowledgements…): Credits (`NOTICE`), Third-Party Licenses (`THIRD_PARTY_NOTICES.md`) and License (`LICENSE`) rendered from the bundled files, under a header with the icon, version, copyright, licence and repository link. The About panel now carries credits (description, licence, repository, and a pointer to Acknowledgements). New probe `MacVisualizer --acknowledgements-probe <outdir>` renders each section in light and dark to PNGs.
+- `NOTICE` and the README now name the Spotify public track page (used for the lyrics length correction) among the network services, and both have a Trademarks section (the product names used are trademarks of their owners; the project is independent of them).
+
+### Changed
+- **Track card click**: clicking the card now brings Spotify or Apple Music forward and also restores the player's window if it is minimized or closed (0.1.0 only brought a running player to the front). A double-click on the card no longer toggles full screen; double-click elsewhere in the window still does.
+- **Spinner rotation keys repeat while held**: `t`, `Shift+t`, `y`, `Shift+y`, `Option+t` and `Option+Shift+t` keep stepping by the rotation step while held; the other Spinner keys still act once per press.
+- **`0` now resets or flips**: it still eases the disc back to the front by the shortest way, but pressed again while the disc is face-on it flips to the other side, tumbling about the horizontal axis (as if `t` were pressed until the other face shows); each further press flips again. `Option+0` does the same with the flip about the vertical axis. The two chain in any order, and any pose that is not face-on resets first. The Settings "Reset orientation" button only resets. In the classic shader renderer, which ignores yaw, `Option+0` changes only the side the scroll wheel pushes for.
+- **`c` cycles three hub finishes** (lit, raised, engraved) instead of two.
+- **Spinner Option-drag locks the window**: while the Spinner is active and Option is held (and through a whole drag, even if Option is released mid-drag), the window cannot be moved by dragging its background, so an Option-drag rotates the disc instead of moving the window. The lock is released when the window or the app loses focus.
+- **RealityKit hub marks are real geometry** for all three finishes (a cut channel with a floor and walls for Lit and Engraved, a mark standing proud for Raised, meshed from the same stroke lists the classic shader draws), replacing the generated hub textures. The classic shader still paints its marks. The 2048-pixel hub texture sets are no longer generated.
+- Key names in the README, the cheat sheet and the Visualizer menu titles are lowercase (`h`/`l`, `j`/`k`, `r`, `f`, `m`, `c`, `b`, `u`, `g`); the keys themselves are unchanged.
+
+### Removed
+- `MacVisualizer --rk-hub-check` (it compared the hub texture generator with its reference; the generator is gone).
+
 ## [0.1.0] - 2026-11-21
 
 First public release.

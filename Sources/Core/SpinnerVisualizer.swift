@@ -33,7 +33,7 @@ public struct SpinnerUniforms {
     public var metal: Int32 = 0          // SpinnerMetal.index (material index)
     public var zoom: Float = 1           // probe-only magnification; 1 in the live app
     public var tilt: Float = 0           // view tilt about the horizontal axis, rad (0 = face-on)
-    public var hubFinish: Float = 0      // SpinnerHubFinish index as a float (0 lit, 1 raised)
+    public var hubFinish: Float = 0      // SpinnerHubFinish index as a float (0 lit, 1 raised, 2 engraved)
     // Appended settings (layout must match the Metal struct): all 1 / default at the factory settings.
     public var roomLight: Float = 1      // multiplier on the non-emissive lighting of the metal
     public var glowBrightness: Float = 1 // multiplier on rod / arc / lit-mark emission
@@ -108,6 +108,8 @@ public final class SpinnerVisualizer: Visualizer {
             yawLeft -= direction
         }
         if requests.reset { orientation.reset() }
+        if requests.resetOrFlip { orientation.resetOrFlip() }
+        if requests.resetOrFlipYaw { orientation.resetOrFlipYaw() }
     }
 
     /// Probe hook. Pins angle/velocity and the blur dt so the offscreen

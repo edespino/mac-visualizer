@@ -131,6 +131,16 @@ public func mouseBinding(button: MouseButton, clickCount: Int,
     }
 }
 
+/// Whether a bound action must be skipped because the click landed on the visible track card.
+/// The card owns its own click (it activates the source player), so a bare double-click on it
+/// must not also toggle full screen. `point` and `cardRect` share one coordinate space; a nil
+/// rect means no card is shown. Every other action is unaffected.
+public func suppressesActionOverCard(action: ControlAction, point: CGPoint, cardRect: CGRect?) -> Bool {
+    guard action == .toggleFullscreen else { return false }
+    guard let rect = cardRect else { return false }
+    return rect.contains(point)
+}
+
 /// Turns scroll deltas into palette steps: positive = next, negative = previous.
 /// Scrolling down (content moving up, i.e. a negative `scrollingDeltaY`, which AppKit
 /// already adjusts for the natural-scrolling preference) steps to the next palette.
@@ -163,4 +173,65 @@ public struct ScrollStepAccumulator {
         remainder += (negative ? 1 : -1) * Double(whole) * preciseThreshold
         return negative ? whole : -whole
     }
+}
+
+
+/// Whether the main window must be non-draggable. The window server starts a background/title-bar drag from the
+/// window's drag regions before the app's event monitors can consume the press, so the window is locked while an
+/// Option-drag can begin (Spinner active, exactly Option held) and for the whole drag once one has started, even if
+/// Option is released mid-drag.
+public func spinnerWindowLocked(spinnerActive: Bool, modifiers: ModifierState, dragInProgress: Bool) -> Bool {
+    if !spinnerActive { return false }
+    if dragInProgress { return true }
+    let onlyOption: ModifierState = ModifierState(option: true)
+    return modifiers == onlyOption
+}
+
+/// A Spinner-only key. `t` / `y` family are rotation keys and REPEAT while held; every other Spinner key acts once.
+public enum SpinnerKeyAction: Equatable {
+    case pitchForward, pitchBack, yawRight, yawLeft
+    case cycleMetal, resetOrFlip, resetOrFlipYaw, cycleMusicMode, cycleHubFinish, toggleHum, cycleRenderer
+
+    /// True for the four rotation keys, the only Spinner keys that honour key repeat.
+    public var repeats: Bool {
+        switch self {
+        case .pitchForward, .pitchBack, .yawRight, .yawLeft: return true
+        default: return false
+        }
+    }
+}
+
+/// Maps a key-down to a Spinner key action (the caller applies it only while the Spinner is active), or nil.
+/// `charactersIgnoringModifiers` is used (not `characters`) because Option changes the produced character (Option+t
+/// gives a dagger). Rules: bare `t` / `y` = pitch forward / yaw right; Shift+`t` / Shift+`y` = pitch back / yaw left;
+/// Option+`0` = reset or flip about the vertical axis (exactly Option; Option types a symbol, hence the unmodified key);
+/// Option+`t` = yaw right and Option+Shift+`t` = yaw left (the one Option exception; Command and Control never match).
+/// The other keys need no modifier at all. Repeats are returned only for rotation keys.
+public func spinnerKeyAction(charactersIgnoringModifiers: String, modifiers: ModifierState,
+                             isRepeat: Bool) -> SpinnerKeyAction? {
+    if modifiers.command || modifiers.control { return nil }
+    let key: String = charactersIgnoringModifiers.lowercased()
+    var action: SpinnerKeyAction? = nil
+    if modifiers.option {
+        if key == "t" { action = modifiers.shift ? .yawLeft : .yawRight }
+        if key == "0" && !modifiers.shift { action = .resetOrFlipYaw }
+    } else if modifiers.shift {
+        if key == "t" { action = .pitchBack }
+        if key == "y" { action = .yawLeft }
+    } else {
+        switch key {
+        case "t": action = .pitchForward
+        case "y": action = .yawRight
+        case "m": action = .cycleMetal
+        case "0": action = .resetOrFlip
+        case "b": action = .cycleMusicMode
+        case "c": action = .cycleHubFinish
+        case "u": action = .toggleHum
+        case "g": action = .cycleRenderer
+        default: break
+        }
+    }
+    guard let found = action else { return nil }
+    if isRepeat && !found.repeats { return nil }
+    return found
 }

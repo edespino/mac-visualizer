@@ -196,4 +196,93 @@ final class InputControlsTests: XCTestCase {
         let json = #"{ "visualizerStyle": "bars", "mouseControlModifier": "control" }"#.data(using: .utf8)!
         XCTAssertEqual(try JSONDecoder().decode(VisualizerSettings.self, from: json).mouseControlModifier, .shift)
     }
+
+    // MARK: track card double-click
+
+    func testFullscreenToggleSuppressedOnCard() {
+        let card = CGRect(x: 20, y: 20, width: 200, height: 60)
+        let inside = CGPoint(x: 100, y: 50)
+        XCTAssertTrue(suppressesActionOverCard(action: .toggleFullscreen, point: inside, cardRect: card))
+    }
+
+    func testFullscreenToggleNotSuppressedOffCardOrWithoutCard() {
+        let card = CGRect(x: 20, y: 20, width: 200, height: 60)
+        let outside = CGPoint(x: 400, y: 300)
+        XCTAssertFalse(suppressesActionOverCard(action: .toggleFullscreen, point: outside, cardRect: card))
+        XCTAssertFalse(suppressesActionOverCard(action: .toggleFullscreen, point: CGPoint(x: 100, y: 50), cardRect: nil))
+    }
+
+    func testOtherActionsNeverSuppressedOverCard() {
+        let card = CGRect(x: 20, y: 20, width: 200, height: 60)
+        let inside = CGPoint(x: 100, y: 50)
+        XCTAssertFalse(suppressesActionOverCard(action: .showContextMenu, point: inside, cardRect: card))
+        XCTAssertFalse(suppressesActionOverCard(action: .previousVisualization, point: inside, cardRect: card))
+    }
+
+    // MARK: spinner window lock
+
+    func testWindowLockedWhileSpinnerActiveAndOnlyOptionHeld() {
+        XCTAssertTrue(spinnerWindowLocked(spinnerActive: true, modifiers: ModifierState(option: true), dragInProgress: false))
+    }
+
+    func testWindowNotLockedWithoutOptionOrOtherStyle() {
+        XCTAssertFalse(spinnerWindowLocked(spinnerActive: true, modifiers: ModifierState(), dragInProgress: false))
+        XCTAssertFalse(spinnerWindowLocked(spinnerActive: false, modifiers: ModifierState(option: true), dragInProgress: false))
+    }
+
+    func testWindowNotLockedWhenOptionCombinedWithOtherModifier() {
+        XCTAssertFalse(spinnerWindowLocked(spinnerActive: true, modifiers: ModifierState(shift: true, option: true), dragInProgress: false))
+        XCTAssertFalse(spinnerWindowLocked(spinnerActive: true, modifiers: ModifierState(option: true, command: true), dragInProgress: false))
+    }
+
+    func testWindowStaysLockedDuringDragAfterOptionReleased() {
+        XCTAssertTrue(spinnerWindowLocked(spinnerActive: true, modifiers: ModifierState(), dragInProgress: true))
+    }
+
+    func testWindowUnlockedWhenSpinnerLeftEvenIfDragFlagSet() {
+        XCTAssertFalse(spinnerWindowLocked(spinnerActive: false, modifiers: ModifierState(), dragInProgress: true))
+    }
+
+    // MARK: Spinner keys
+
+    func testSpinnerRotationKeysRepeat() {
+        let none = ModifierState()
+        let shift = ModifierState(shift: true)
+        XCTAssertEqual(spinnerKeyAction(charactersIgnoringModifiers: "t", modifiers: none, isRepeat: true), .pitchForward)
+        XCTAssertEqual(spinnerKeyAction(charactersIgnoringModifiers: "T", modifiers: shift, isRepeat: true), .pitchBack)
+        XCTAssertEqual(spinnerKeyAction(charactersIgnoringModifiers: "y", modifiers: none, isRepeat: true), .yawRight)
+        XCTAssertEqual(spinnerKeyAction(charactersIgnoringModifiers: "Y", modifiers: shift, isRepeat: true), .yawLeft)
+    }
+
+    func testSpinnerNonRotationKeysIgnoreRepeat() {
+        let none = ModifierState()
+        for key in ["m", "0", "b", "c", "u", "g"] {
+            XCTAssertNotNil(spinnerKeyAction(charactersIgnoringModifiers: key, modifiers: none, isRepeat: false), key)
+            XCTAssertNil(spinnerKeyAction(charactersIgnoringModifiers: key, modifiers: none, isRepeat: true), key)
+        }
+        XCTAssertEqual(spinnerKeyAction(charactersIgnoringModifiers: "0", modifiers: none, isRepeat: false), .resetOrFlip)
+    }
+
+    func testOptionZeroFlipsYawOnlyWithExactlyOption() {
+        let opt = ModifierState(option: true)
+        XCTAssertEqual(spinnerKeyAction(charactersIgnoringModifiers: "0", modifiers: opt, isRepeat: false), .resetOrFlipYaw)
+        XCTAssertNil(spinnerKeyAction(charactersIgnoringModifiers: "0", modifiers: opt, isRepeat: true))
+        XCTAssertNil(spinnerKeyAction(charactersIgnoringModifiers: "0", modifiers: ModifierState(shift: true, option: true), isRepeat: false))
+        XCTAssertNil(spinnerKeyAction(charactersIgnoringModifiers: "0", modifiers: ModifierState(option: true, command: true), isRepeat: false))
+        XCTAssertNil(spinnerKeyAction(charactersIgnoringModifiers: "0", modifiers: ModifierState(option: true, control: true), isRepeat: false))
+    }
+
+    func testOptionTIsYaw() {
+        XCTAssertEqual(spinnerKeyAction(charactersIgnoringModifiers: "t", modifiers: ModifierState(option: true), isRepeat: false), .yawRight)
+        XCTAssertEqual(spinnerKeyAction(charactersIgnoringModifiers: "T", modifiers: ModifierState(shift: true, option: true), isRepeat: true), .yawLeft)
+    }
+
+    func testSpinnerKeysRejectCommandControlAndOtherOption() {
+        XCTAssertNil(spinnerKeyAction(charactersIgnoringModifiers: "t", modifiers: ModifierState(command: true), isRepeat: false))
+        XCTAssertNil(spinnerKeyAction(charactersIgnoringModifiers: "t", modifiers: ModifierState(option: true, command: true), isRepeat: false))
+        XCTAssertNil(spinnerKeyAction(charactersIgnoringModifiers: "t", modifiers: ModifierState(control: true), isRepeat: false))
+        XCTAssertNil(spinnerKeyAction(charactersIgnoringModifiers: "y", modifiers: ModifierState(option: true), isRepeat: false))
+        XCTAssertNil(spinnerKeyAction(charactersIgnoringModifiers: "m", modifiers: ModifierState(option: true), isRepeat: false))
+        XCTAssertNil(spinnerKeyAction(charactersIgnoringModifiers: "m", modifiers: ModifierState(shift: true), isRepeat: false))
+    }
 }

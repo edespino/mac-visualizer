@@ -749,7 +749,7 @@ struct SpinnerUniforms {
     int metal;      // material index (0 steel .. 4 anodized titanium)
     float zoom;     // probe-only magnification (1 in the app)
     float tilt;     // view tilt about the horizontal axis, rad, one full turn [0, 2 pi): 0 = front face-on, pi = back face-on
-    float hubFinish; // < 0.5 lit (mark cut into the hub as glowing channels), else raised (mark stands proud of the plain hub)
+    float hubFinish; // < 0.5 lit (mark cut into the hub as glowing channels), < 1.5 raised (mark stands proud of the plain hub), else engraved (unlit dark matte laser cut)
     // Appended settings (same order as SpinnerUniforms in Swift; all neutral at the factory settings).
     float roomLight;      // multiplier on the non-emissive lighting of the metal
     float glowBrightness; // multiplier on rod / arc / lit-mark emission
@@ -1699,7 +1699,7 @@ static inline float4 spRimSample(thread const SpRimBase &B, float ang, SpMat mat
 
 // The hub's top face (a slightly domed polished disc at the top of the hub cylinder), shaded at local point q
 // (face-local coordinates, hub center at the origin). Static: the hub does not rotate. Carries the mark in either finish.
-static inline float3 spHubTop(float2 q, float e, float hm, bool isRaised, SpMat mat, float3 tint, float2 cs, float3 vw, float3 ld) {
+static inline float3 spHubTop(float2 q, float e, float hm, bool isRaised, bool isEngraved, SpMat mat, float3 tint, float2 cs, float3 vw, float3 ld) {
     const float hubR = spHubR;
     float hr = length(q);
     float3 hubCol = float3(0.0);
@@ -1724,7 +1724,24 @@ static inline float3 spHubTop(float2 q, float e, float hm, bool isRaised, SpMat 
             hubCol *= 1.0 - 0.7 * ring;
             hubCol += float3(0.30, 0.31, 0.34) * hubTone * kSpinnerLight * mat.room * saturate(1.0 - fabs(dr + 1.6)) * (0.35 + 1.3 * ld.z * saturate(0.5 - 0.5 * dot(rd, ld.xy))) * mix(0.55, 1.0, ld.z);   // lit lip follows the light (the lip facing it)
 
-            if (!isRaised) {   // lit finish: the mark is cut straight into the continuous hub face as glowing channels
+            if (isEngraved) {
+            // Engraved finish: unlit. The mark is laser-cut into the polished hub as a dark matte channel: a dark floor with an
+            // occlusion band along the wall that stands toward the light, a lit wall on the opposite side, no emission.
+            float2 awayDirE = -ld.xy;
+            float emE, wE;
+            spMarkInfo(q, hm, emE, wE);
+            float dE = min(spMarkDepth, 0.45 * wE);
+            float d0E = spMarkD(q, hm);
+            float inkE = 1.0 - spSS(-e, e, d0E);
+            float d1E = spMarkD(q + awayDirE * dE, hm);
+            float ink1E = 1.0 - spSS(-e, e, d1E);
+            float3 faceE = hubCol * 1.6 + mat.f0 * 0.10 * kSpinnerLight * mat.dim;   // brighter polished face so the cut reads
+            float3 floorE = mat.f0 * 0.02 * kSpinnerLight * mat.dim * (1.0 - 0.5 * (1.0 - spSS(0.0, 0.4 * dE, -d1E)));
+            float wallA = inkE * (1.0 - ink1E);
+            float3 wallE = mat.f0 * 0.30 * kSpinnerLight * mat.dim * mix(0.4, 1.0, ld.z);
+            float3 chan = mix(floorE, wallE, wallA);
+            hubCol = mix(faceE, chan, inkE);
+            } else if (!isRaised) {   // lit finish: the mark is cut straight into the continuous hub face as glowing channels
             float2 lightDir = ld.xy;
             float2 awayDir = -lightDir;
 
@@ -1816,7 +1833,7 @@ struct SpHit { int kind; float3 P; float3 D; };   // kind: 0 none, 1 outer face,
 
 struct SpCtx {
     float2 cs; float mir; SpMat mat; float3 tint; float e; float2 px; float3 ld; float3 Lk; float3 camW;
-    float angle; float sweep; int N; float emBoost; bool raised; float hm; float fade;
+    float angle; float sweep; int N; float emBoost; bool raised; bool engraved; float hm; float fade;
 };
 
 static inline void spRayLocal(float2 qsP, float2 cs, thread float3 &Ol, thread float3 &Dl) {
@@ -1962,7 +1979,7 @@ static inline float4 spShadeHit(SpHit h, thread const SpCtx &C) {
         return acc * (C.fade / float(C.N));
     }
     if (h.kind == 3) {
-        return float4(spHubTop(q, C.e, C.hm, C.raised, C.mat, C.tint, C.cs, v, C.ld), 1.0) * C.fade;
+        return float4(spHubTop(q, C.e, C.hm, C.raised, C.engraved, C.mat, C.tint, C.cs, v, C.ld), 1.0) * C.fade;
     }
     if (h.kind == 4) return float4(spStepWallCol(h.P, C, v), 1.0);
     return float4(spHubWallCol(h.P, C, v), 1.0);
@@ -2034,7 +2051,8 @@ fragment float4 spinner_fs(FSQOut in [[stage_in]],
     // plane (a distance H behind the puck center) sees the same pinhole, so its coordinates are scaled by the perspective factor.
     float2 qsS = qs * (1.0 + spPerspective * 0.5 / spCamDist);
     qsS.y -= zFace * ts;
-    bool isRaised = u.hubFinish > 0.5;
+    bool isRaised = u.hubFinish > 0.5 && u.hubFinish < 1.5;
+    bool isEngraved = u.hubFinish > 1.5;
     // The hub's back carries the other mark.
     float hm = back ? (u.hubMark < 0.5 ? 1.0 : 0.0) : u.hubMark;
 
@@ -2088,7 +2106,7 @@ fragment float4 spinner_fs(FSQOut in [[stage_in]],
     // --- front surfaces: nearest analytic hit among the outer face, the web, the hub top, the step wall and the hub wall ---
     SpCtx C;
     C.cs = cs; C.mir = mir; C.mat = mat; C.tint = tint; C.e = e; C.px = float2(fxw, fyw); C.ld = ld; C.Lk = spKeyLocal(cs);
-    C.camW = camW; C.angle = u.angle; C.sweep = sweep; C.N = N; C.emBoost = emBoost; C.raised = isRaised; C.hm = hm; C.fade = faceFade;
+    C.camW = camW; C.angle = u.angle; C.sweep = sweep; C.N = N; C.emBoost = emBoost; C.raised = isRaised; C.engraved = isEngraved; C.hm = hm; C.fade = faceFade;
     SpHit h0 = spSelect(Ol, Dl);
     {
         // Occlusion edges between the levels are antialiased by re-selecting at four sub-pixel taps; only where the nearest surface

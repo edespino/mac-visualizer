@@ -116,6 +116,38 @@ public struct SpinnerOrientation: Equatable {
         yawTarget = (yaw / turn).rounded() * turn
     }
 
+    /// True when the pitch TARGET and the yaw TARGET are each a multiple of half a turn (180 degrees): a standard
+    /// face-on pose, front or back, however it was reached.
+    private var targetIsFaceOn: Bool {
+        let eps: Double = 1e-3
+        let halfTurn: Double = Double.pi
+        let pitchRem: Double = abs(pitchTarget - (pitchTarget / halfTurn).rounded() * halfTurn)
+        let yawRem: Double = abs(yawTarget - (yawTarget / halfTurn).rounded() * halfTurn)
+        return pitchRem < eps && yawRem < eps
+    }
+
+    /// The `0` key: from any pose other than a standard face-on one (see `targetIsFaceOn`), eases back to the front
+    /// pose (`reset()`); at a face-on TARGET it flips instead by moving the pitch target half a turn forward (the `t`
+    /// direction, a tumble about the horizontal axis). Decided from the targets (not the eased values), so a second
+    /// press during the reset animation flips.
+    public mutating func resetOrFlip() {
+        if targetIsFaceOn {
+            pitchTarget += Double.pi
+        } else {
+            reset()
+        }
+    }
+
+    /// Option+`0`: same rule as `resetOrFlip()`, but the flip is about the vertical screen axis (the yaw target moves
+    /// half a turn in the `y` / yaw-right direction). Flips by either key chain in any order.
+    public mutating func resetOrFlipYaw() {
+        if targetIsFaceOn {
+            yawTarget += Double.pi
+        } else {
+            reset()
+        }
+    }
+
     /// Advances the easing by `dt` seconds (first-order lag, never overshoots).
     public mutating func ease(dt: Double, timeConstant: Double) {
         let tau: Double = max(timeConstant, 1e-6)
@@ -135,11 +167,15 @@ public struct SpinnerOrientationRequests: Equatable {
     public var pitchSteps: Int = 0
     public var yawSteps: Int = 0
     public var reset: Bool = false
+    /// The `0` key: reset, or flip to the other face when already face-on (see `SpinnerOrientation.resetOrFlip`).
+    public var resetOrFlip: Bool = false
+    /// Option+`0`: reset, or flip about the vertical axis when face-on (see `SpinnerOrientation.resetOrFlipYaw`).
+    public var resetOrFlipYaw: Bool = false
     public var dragPitchRadians: Double = 0
     public var dragYawRadians: Double = 0
     public init() {}
     public var isEmpty: Bool {
-        pitchSteps == 0 && yawSteps == 0 && !reset && dragPitchRadians == 0 && dragYawRadians == 0
+        pitchSteps == 0 && yawSteps == 0 && !reset && !resetOrFlip && !resetOrFlipYaw && dragPitchRadians == 0 && dragYawRadians == 0
     }
 }
 

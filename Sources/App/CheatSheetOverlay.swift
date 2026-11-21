@@ -37,27 +37,29 @@ struct CheatSheetOverlay: View {
     }
 
     private let keys: [(String, String)] = [
-        ("H / L", "Previous / next visualization"),
-        ("J / K", "Next / previous palette"),
-        ("R", "Random visualization"),
+        ("h / l", "Previous / next visualization"),
+        ("j / k", "Next / previous palette"),
+        ("r", "Random visualization"),
         (", / .", "Previous / next song"),
         ("Space", "Play / pause"),
-        ("F", "Toggle full screen"),
+        ("f", "Toggle full screen"),
         ("?", "Show / hide this sheet"),
         ("Esc", "Close this sheet"),
     ]
 
     private var spinnerKeys: [(String, String)] {
         [
-            ("M", "Metal"),
-            ("T / Shift+T", "Pitch forward / back (\(spinnerStepDegrees) degree steps)"),
-            ("Y / Shift+Y", "Yaw right / left (\(spinnerStepDegrees) degree steps)"),
-            ("0", "Reset orientation"),
+            ("m", "Metal"),
+            ("t / Shift+t", "Pitch forward / back (\(spinnerStepDegrees) degree steps, hold to repeat)"),
+            ("y / Shift+y", "Yaw right / left (hold to repeat)"),
+            ("Option+t / Option+Shift+t", "Yaw right / left (same as y / Shift+y, hold to repeat)"),
+            ("0", "Reset orientation; pressed again at face-on, flip to the other side"),
+            ("Option+0", "Same, flipping about the vertical axis (RealityKit; the classic shader ignores yaw)"),
             ("Option+drag", "Rotate the disc freely (yaw / pitch)"),
-            ("B", "Music mode"),
-            ("C", "Hub finish"),
-            ("U", "Hum on / off (the hum is only heard when no music is playing)"),
-            ("G", "Classic shader renderer / RealityKit"),
+            ("b", "Music mode"),
+            ("c", "Hub finish: lit, raised, engraved"),
+            ("u", "Hum on / off (the hum is only heard when no music is playing)"),
+            ("g", "Classic shader renderer / RealityKit"),
             ("Scroll", "Spin the disc"),
         ]
     }
@@ -76,7 +78,7 @@ struct CheatSheetOverlay: View {
                 Text("Spinner").font(.headline)
                 ForEach(spinnerKeys, id: \.0) { k in
                     HStack(spacing: 12) {
-                        Text(k.0).font(.system(.body, design: .monospaced)).frame(width: 96, alignment: .leading)
+                        Text(k.0).font(.system(.body, design: .monospaced)).frame(width: 190, alignment: .leading)
                         Text(k.1)
                     }
                 }

@@ -71,7 +71,9 @@ final class SpinnerTiltMusicTests: XCTestCase {
 
     func testHubFinishCycleWraps() {
         XCTAssertEqual(SpinnerHubFinish.lit.next, .raised)
-        XCTAssertEqual(SpinnerHubFinish.raised.next, .lit)
+        XCTAssertEqual(SpinnerHubFinish.raised.next, .engraved)
+        XCTAssertEqual(SpinnerHubFinish.engraved.next, .lit)
+        XCTAssertEqual(SpinnerHubFinish.engraved.displayName, "Engraved")
         XCTAssertEqual(SpinnerHubFinish.lit.displayName, "Lit")
         XCTAssertEqual(SpinnerHubFinish.raised.displayName, "Raised")
         var s = SpinnerSettings(); s.hubFinish = .raised

@@ -54,6 +54,13 @@ final class SettingsRouter {
 enum MainWindow {
     static weak var window: NSWindow?
     static weak var settingsWindow: NSWindow?
+    /// On-screen rect of the visible track card (including its hover enlargement), in the SwiftUI window
+    /// space (top-left origin, points). Published by `TrackOverlay` while the card is shown, nil otherwise;
+    /// read by the mouse monitor so a double-click on the card does not toggle full screen. Main thread only.
+    static var trackCardRect: CGRect?
+    /// True while the window must not be draggable (Spinner Option-drag possible or in progress). Read by
+    /// `configureWindowBackground` so a settings refresh cannot re-enable background dragging mid-lock.
+    static var dragLocked: Bool = false
 }
 
 /// Registers the Settings window for the bare-key monitor. Strictly pass-through
@@ -112,6 +119,9 @@ final class InputController {
     /// A click action held back while an Option-press could still turn into a drag (only when the app-wide
     /// modifier is itself Option, so its left-click binding and the drag share the same press).
     private var deferredClick: ControlAction?
+    /// `isMovable` as it was before the lock engaged, restored on unlock.
+    private var savedIsMovable: Bool = true
+    private var observers: [NSObjectProtocol] = []
 
     init(model: RenderModel, nowPlaying: NowPlayingService) {
         self.model = model
@@ -119,27 +129,80 @@ final class InputController {
         install()
     }
 
-    deinit { monitors.forEach { NSEvent.removeMonitor($0) } }
+    deinit {
+        monitors.forEach { NSEvent.removeMonitor($0) }
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+    }
+
+    /// Locks or unlocks window dragging from `spinnerWindowLocked`. Idempotent; called from every monitor and on
+    /// resign-key / app deactivation (which also cancel any drag, so a missed Option-up cannot leave it stuck).
+    private func updateWindowLock() {
+        let f: NSEvent.ModifierFlags = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let held: ModifierState = ModifierState(shift: f.contains(.shift), option: f.contains(.option),
+                                                command: f.contains(.command), control: f.contains(.control))
+        let spinner: Bool = model.settings.visualizerStyle == .spinner
+        let lock: Bool = spinnerWindowLocked(spinnerActive: spinner, modifiers: held,
+                                             dragInProgress: spinnerDrag != nil)
+        applyWindowLock(lock)
+    }
+
+    private func applyWindowLock(_ lock: Bool) {
+        if lock == MainWindow.dragLocked { return }
+        MainWindow.dragLocked = lock
+        guard let window = MainWindow.window else { return }
+        if lock {
+            savedIsMovable = window.isMovable
+            window.isMovable = false
+            window.isMovableByWindowBackground = false
+        } else {
+            window.isMovable = savedIsMovable
+            window.isMovableByWindowBackground = true
+        }
+    }
+
+    private func cancelDragAndUnlock() {
+        spinnerDrag = nil
+        deferredClick = nil
+        applyWindowLock(false)
+    }
 
     private func install() {
         if let m = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] e in
             guard let self else { return e }
+            defer { self.updateWindowLock() }
             return self.handleKey(e)
         }) { monitors.append(m) }
         if let m = NSEvent.addLocalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown], handler: { [weak self] e in
                 guard let self else { return e }
+                defer { self.updateWindowLock() }
                 return self.handleMouse(e)
             }) { monitors.append(m) }
         if let m = NSEvent.addLocalMonitorForEvents(
             matching: [.leftMouseDragged, .leftMouseUp], handler: { [weak self] e in
                 guard let self else { return e }
+                defer { self.updateWindowLock() }
                 return self.handleDrag(e)
             }) { monitors.append(m) }
         if let m = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel, handler: { [weak self] e in
             guard let self else { return e }
+            defer { self.updateWindowLock() }
             return self.handleScroll(e)
         }) { monitors.append(m) }
+        if let m = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged, handler: { [weak self] e in
+            self?.updateWindowLock()
+            return e
+        }) { monitors.append(m) }
+        let center: NotificationCenter = NotificationCenter.default
+        let resignKey: NSObjectProtocol = center.addObserver(forName: NSWindow.didResignKeyNotification, object: nil,
+                                                             queue: .main) { [weak self] n in
+            if (n.object as? NSWindow) === MainWindow.window { self?.cancelDragAndUnlock() }
+        }
+        let resignActive: NSObjectProtocol = center.addObserver(forName: NSApplication.didResignActiveNotification,
+                                                                object: nil, queue: .main) { [weak self] _ in
+            self?.cancelDragAndUnlock()
+        }
+        observers = [resignKey, resignActive]
     }
 
     // MARK: - Event translation
@@ -178,38 +241,12 @@ final class InputController {
         // Never steal keys from a text editor (the Settings filter and text fields
         // type normally; the bare keys apply once focus leaves the field).
         if event.window?.firstResponder is NSText { return event }
-        // Bare `m` cycles the Spinner's metal; only while that style is active.
-        if model.settings.visualizerStyle == .spinner, !event.isARepeat,
-           modifiers(of: event).isEmpty, event.characters == "m" {
-            model.cycleSpinnerMetal()
+        // Spinner keys (decided by the pure `spinnerKeyAction`): rotation keys repeat while held, the rest act once.
+        if model.settings.visualizerStyle == .spinner,
+           let spin = spinnerKeyAction(charactersIgnoringModifiers: event.charactersIgnoringModifiers ?? "",
+                                       modifiers: modifiers(of: event), isRepeat: event.isARepeat) {
+            performSpinnerKey(spin)
             return nil
-        }
-        // Shift+`t` / Shift+`y` (capital T / Y) step the Spinner's pitch back / yaw left by one step; Shift is
-        // allowed for these two keys only, no other modifier.
-        if model.settings.visualizerStyle == .spinner, !event.isARepeat,
-           modifiers(of: event) == ModifierState(shift: true) {
-            if event.characters == "T" {
-                SpinnerInput.shared.pendingOrientation.pitchSteps -= 1
-                return nil
-            }
-            if event.characters == "Y" {
-                SpinnerInput.shared.pendingOrientation.yawSteps -= 1
-                return nil
-            }
-        }
-        // Bare `t` / `y` step the Spinner's pitch forward / yaw right by one step, `0` resets the orientation,
-        // `b` cycles its music mode, `c` its hub finish.
-        if model.settings.visualizerStyle == .spinner, !event.isARepeat, modifiers(of: event).isEmpty {
-            switch event.characters {
-            case "t": SpinnerInput.shared.pendingOrientation.pitchSteps += 1; return nil
-            case "y": SpinnerInput.shared.pendingOrientation.yawSteps += 1; return nil
-            case "0": model.resetSpinnerOrientation(); return nil
-            case "b": model.cycleSpinnerMusicMode(); return nil
-            case "c": model.cycleSpinnerHubFinish(); return nil
-            case "u": model.toggleSpinnerHum(); return nil            // bearing hum on/off
-            case "g": model.cycleSpinnerRenderer(); return nil        // shader <-> RealityKit (macOS 15+; no effect before)
-            default: break
-            }
         }
         guard let action = keyAction(characters: event.characters ?? "", keyCode: event.keyCode,
                                      modifiers: modifiers(of: event), isRepeat: event.isARepeat)
@@ -217,6 +254,22 @@ final class InputController {
         if action == .dismissCheatSheet && !model.cheatSheetVisible { return event }
         perform(action, event: event)
         return nil
+    }
+
+    private func performSpinnerKey(_ action: SpinnerKeyAction) {
+        switch action {
+        case .pitchForward: SpinnerInput.shared.pendingOrientation.pitchSteps += 1
+        case .pitchBack: SpinnerInput.shared.pendingOrientation.pitchSteps -= 1
+        case .yawRight: SpinnerInput.shared.pendingOrientation.yawSteps += 1
+        case .yawLeft: SpinnerInput.shared.pendingOrientation.yawSteps -= 1
+        case .cycleMetal: model.cycleSpinnerMetal()
+        case .resetOrFlip: model.resetOrFlipSpinnerOrientation()
+        case .resetOrFlipYaw: model.resetOrFlipSpinnerYaw()
+        case .cycleMusicMode: model.cycleSpinnerMusicMode()
+        case .cycleHubFinish: model.cycleSpinnerHubFinish()
+        case .toggleHum: model.toggleSpinnerHum()
+        case .cycleRenderer: model.cycleSpinnerRenderer()
+        }
     }
 
     private func handleMouse(_ event: NSEvent) -> NSEvent? {
@@ -253,6 +306,15 @@ final class InputController {
         // A double-click in the title-bar strip is the system's zoom gesture.
         if binding.action == .toggleFullscreen,
            !window.contentLayoutRect.contains(event.locationInWindow) { return event }
+        // The track card handles its own click (activates the player); a double-click on it must not
+        // also toggle full screen. SwiftUI space is top-left origin, the event's is bottom-left.
+        if let content = window.contentView {
+            let p: NSPoint = event.locationInWindow
+            let flipped = CGPoint(x: p.x, y: content.frame.height - p.y)
+            if suppressesActionOverCard(action: binding.action, point: flipped, cardRect: MainWindow.trackCardRect) {
+                return event
+            }
+        }
         perform(binding.action, event: event)
         return binding.consume ? nil : event
     }
@@ -330,6 +392,7 @@ final class InputController {
         add("Settings…") { SettingsRouter.shared.open() }
         add("Lyrics Settings…") { SettingsRouter.shared.open(.lyrics) }
         add("Layout Settings…") { SettingsRouter.shared.open(.layout) }
+        add("Acknowledgements…") { AcknowledgementsRouter.shared.open() }
         menu.addItem(.separator())
         add("Next Visualization") { [model] in model.nextStyle() }
         add("Previous Visualization") { [model] in model.previousStyle() }

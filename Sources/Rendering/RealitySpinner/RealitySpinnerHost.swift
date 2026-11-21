@@ -63,17 +63,18 @@ final class RealitySpinnerHost {
         let t0 = DispatchTime.now().uptimeNanoseconds
         group.enter()
         DispatchQueue.global(qos: .userInitiated).async {
-            let g = buildPuckCPU()
+            let g = buildPuckCPU(frontMark: frontMark)
             let meshNs: UInt64 = DispatchTime.now().uptimeNanoseconds - t0
             DispatchQueue.main.async {
                 let meshMs: Double = Double(meshNs) / 1e6
                 self.setupLog.append(("CPU mesh arrays (background)", meshMs))
+                for (name, ms) in g.hubTimings { self.setupLog.append(("CPU " + name + " (inside mesh arrays)", ms)) }
             }
             geom = g; group.leave()
         }
         group.enter()
         DispatchQueue.global(qos: .userInitiated).async {
-            let im = makeAllImages(frontMark: frontMark)
+            let im = makeAllImages()
             images = im; group.leave()
         }
         group.notify(queue: .main) { [self] in

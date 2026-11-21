@@ -1,7 +1,7 @@
 mac-visualizer
 Copyright 2026 Ed Espino
 
-This product includes software developed by Ed Espino (https://github.com/eespino).
+This product includes software developed by Ed Espino (https://github.com/edespino).
 
 Licensed under the Apache License, Version 2.0. See LICENSE for the full text.
 
@@ -80,10 +80,11 @@ The following standard techniques are used and are credited collectively rather 
 
 ## Network services (lyrics overlay)
 
-The lyrics overlay consumes two public network APIs over their public HTTP endpoints; no third-party code from either is included in this app:
+The lyrics overlay uses two public network APIs and reads one public web page over HTTPS; no third-party code from any of them is included in this app:
 
 - **[LRCLIB](https://lrclib.net)** — the public lyrics API used to look up time-synced lyrics (no account required).
 - **Google Gemini API** (https://ai.google.dev) — used, with the user's own API key, to translate lyric lines.
+- **Spotify public track page** (`https://open.spotify.com/track/<id>`) — read once per track per session to get the track's published length, which corrects lyric matching when Spotify reports a shortened length (for example under Crossfade). Only the track id is sent. This is an unofficial read of a public web page, not an official Spotify API; if the page changes, only this length correction is lost.
 
 ## Projects we surveyed but did NOT integrate
 
@@ -97,6 +98,10 @@ The following projects were studied during early-stage research (a local collect
 - **[AudioVisualizerKit](https://github.com/AudioVisualizerKit/AudioVisualizerKit)** — FFT + windowing reference; we use vDSP directly.
 - **[libvisual](https://github.com/Libvisual/libvisual)** plugins (GPL-2.0) — jakdaw, blursk, oinksie, corona — algorithm and aesthetic survey only. (goom2k4, nebulus, plazma and bumpscope from the same collection also informed specific features and are credited individually above.)
 - **[SwiftUI-AudioKit-Visualizer](https://github.com/AudioKit/Cookbook)**, **[AudioPlaybackVisualizer](https://github.com/0xLeif/AudioPlaybackVisualizer)**, **[VisuAc](https://github.com/microcosm/VisuAc)**, **[stereoDrift](https://github.com/stereoDrift/stereoDrift.github.io)**, **[react-native-waveform-player](https://github.com/markusewerth/react-native-waveform-player)**, **[synesthesia](https://github.com/jameswebster/synesthesia)**, **[kaleidosync](https://github.com/zachwinter/kaleidosync)**, **[wavesync](https://github.com/cellofellow/wavesync)** — design and feature survey only.
+
+## Trademarks
+
+Spotify is a trademark of Spotify AB. Apple, Apple Music, macOS, Metal and RealityKit are trademarks of Apple Inc. Google and Gemini are trademarks of Google LLC. All other names are the property of their respective owners. mac-visualizer is an independent project and is not affiliated with, sponsored by or endorsed by any of them; the names are used only to describe what the app works with.
 
 ## Future LGPL compliance (not yet applicable)
 

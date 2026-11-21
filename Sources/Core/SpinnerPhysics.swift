@@ -71,21 +71,35 @@ public enum SpinnerHubMark: String, Codable, CaseIterable {
 }
 
 /// Hub finish. `lit` = flat polished hub with the mark cut into it as glowing channels;
-/// `raised` = plain polished hub with the mark standing proud of it as a bright low relief.
+/// `raised` = plain polished hub with the mark standing proud of it as a bright low relief;
+/// `engraved` = unlit: the mark laser-cut shallowly into the polished hub as a dark matte channel (no glow).
 /// Independent of `SpinnerHubMark`.
 public enum SpinnerHubFinish: String, Codable, CaseIterable {
-    case lit, raised
+    case lit, raised, engraved
 
-    /// Finish index passed to the renderers (0 lit, 1 raised).
-    public var index: Int { self == .lit ? 0 : 1 }
+    /// Finish index passed to the renderers (0 lit, 1 raised, 2 engraved).
+    public var index: Int {
+        switch self {
+        case .lit: return 0
+        case .raised: return 1
+        case .engraved: return 2
+        }
+    }
 
     /// The next finish, wrapping after the last.
-    public var next: SpinnerHubFinish { self == .lit ? .raised : .lit }
+    public var next: SpinnerHubFinish {
+        switch self {
+        case .lit: return .raised
+        case .raised: return .engraved
+        case .engraved: return .lit
+        }
+    }
 
     public var displayName: String {
         switch self {
         case .lit: return "Lit"
         case .raised: return "Raised"
+        case .engraved: return "Engraved"
         }
     }
 }

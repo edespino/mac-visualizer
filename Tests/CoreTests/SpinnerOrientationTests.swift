@@ -272,4 +272,91 @@ final class SpinnerDragGestureTests: XCTestCase {
         XCTAssertEqual(r.pitch, expectedPitch, accuracy: 1e-12)  // down: top edge toward the viewer
         XCTAssertEqual(r.yaw, 0, accuracy: 1e-12)
     }
+
+    func testQueuedStepsMoveTargetByNTimesStep() {
+        var o = SpinnerOrientation()
+        let step: Double = 15 * Double.pi / 180
+        for _ in 0..<40 { o.step(pitch: 1, stepRadians: step) }
+        XCTAssertEqual(o.pitchTarget, 40 * step, accuracy: 1e-9)
+        o.ease(dt: 0.5, timeConstant: 0.35)
+        XCTAssertLessThan(o.pitch, o.pitchTarget)
+        XCTAssertGreaterThan(o.pitch, 0)
+        for _ in 0..<600 { o.ease(dt: 1.0 / 60.0, timeConstant: 0.35) }
+        XCTAssertEqual(o.pitch, 40 * step, accuracy: 1e-6)
+    }
+
+    func testResetOrFlipFromTiltedResets() {
+        var o = SpinnerOrientation()
+        o.set(pitch: 0.7, yaw: 0)
+        o.resetOrFlip()
+        XCTAssertEqual(o.pitchTarget, 0, accuracy: 1e-9)
+    }
+
+    func testResetOrFlipFromFrontFlipsToBackAndBack() {
+        var o = SpinnerOrientation()
+        o.resetOrFlip()
+        XCTAssertEqual(o.pitchTarget, Double.pi, accuracy: 1e-9)
+        o.resetOrFlip()
+        XCTAssertEqual(o.pitchTarget, 2 * Double.pi, accuracy: 1e-9)
+        XCTAssertEqual(o.yawTarget, 0, accuracy: 1e-9)
+    }
+
+    func testResetOrFlipMidResetAnimationFlips() {
+        var o = SpinnerOrientation()
+        o.set(pitch: 0.7, yaw: 0)
+        o.resetOrFlip()                       // target -> 0, current still 0.7
+        o.ease(dt: 0.05, timeConstant: 0.35)
+        o.resetOrFlip()                       // target is face-on: flips
+        XCTAssertEqual(o.pitchTarget, Double.pi, accuracy: 1e-9)
+    }
+
+    func testResetOrFlipWithYawResetsInsteadOfFlipping() {
+        var o = SpinnerOrientation()
+        o.set(pitch: 0, yaw: 0.5)
+        o.resetOrFlip()
+        XCTAssertEqual(o.pitchTarget, 0, accuracy: 1e-9)
+        XCTAssertEqual(o.yawTarget, 0, accuracy: 1e-9)
+    }
+
+    func testResetOrFlipRequestIsNotEmpty() {
+        var r = SpinnerOrientationRequests()
+        XCTAssertTrue(r.isEmpty)
+        r.resetOrFlip = true
+        XCTAssertFalse(r.isEmpty)
+    }
+
+    func testResetOrFlipYawFromFrontFlipsYawAndChains() {
+        var o = SpinnerOrientation()
+        o.resetOrFlipYaw()
+        XCTAssertEqual(o.yawTarget, Double.pi, accuracy: 1e-9)
+        XCTAssertEqual(o.pitchTarget, 0, accuracy: 1e-9)
+        o.resetOrFlipYaw()
+        XCTAssertEqual(o.yawTarget, 2 * Double.pi, accuracy: 1e-9)
+    }
+
+    func testMixedFlipChainKeepsFlipping() {
+        var o = SpinnerOrientation()
+        o.resetOrFlip()
+        o.resetOrFlipYaw()
+        XCTAssertEqual(o.pitchTarget, Double.pi, accuracy: 1e-9)
+        XCTAssertEqual(o.yawTarget, Double.pi, accuracy: 1e-9)
+        o.resetOrFlip()
+        XCTAssertEqual(o.pitchTarget, 2 * Double.pi, accuracy: 1e-9)
+        o.resetOrFlipYaw()
+        XCTAssertEqual(o.yawTarget, 2 * Double.pi, accuracy: 1e-9)
+    }
+
+    func testResetOrFlipYawFromTiltedResets() {
+        var o = SpinnerOrientation()
+        o.set(pitch: 0.7, yaw: 0.3)
+        o.resetOrFlipYaw()
+        XCTAssertEqual(o.pitchTarget, 0, accuracy: 1e-9)
+        XCTAssertEqual(o.yawTarget, 0, accuracy: 1e-9)
+    }
+
+    func testResetOrFlipYawRequestIsNotEmpty() {
+        var r = SpinnerOrientationRequests()
+        r.resetOrFlipYaw = true
+        XCTAssertFalse(r.isEmpty)
+    }
 }

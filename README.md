@@ -17,15 +17,17 @@ Keys, while it is active (`?` lists them):
 | Input | Action |
 |---|---|
 | Scroll wheel | Spin the disc (the wheel pushes the same way on screen on either face) |
-| `T` / `Shift+T` | Pitch forward / back, by the Rotation step setting (15 degrees by default) |
-| `Y` / `Shift+Y` | Yaw right / left, by the Rotation step setting |
-| `0` | Reset the orientation (the shortest way); also the "Reset orientation" button in Settings |
-| `Option` + drag | Rotate the disc freely (horizontal = yaw, vertical = pitch) |
-| `M` | Metal: steel, brass, copper, black zirconium, anodized titanium |
-| `C` | Hub finish: lit or raised (switches instantly) |
-| `B` | Music mode: off, sustain, kick, sustain + kick |
-| `U` | Bearing hum on / off |
-| `G` | Switch between the RealityKit renderer and the classic shader renderer |
+| `t` / `Shift+t` | Pitch forward / back, by the Rotation step setting (15 degrees by default); hold to keep stepping |
+| `y` / `Shift+y` | Yaw right / left, by the Rotation step setting; hold to keep stepping |
+| `Option+t` / `Option+Shift+t` | Same as `y` / `Shift+y` (yaw right / left, about the vertical axis); hold to keep stepping |
+| `Option+0` | Like `0`, but the flip at face-on is about the vertical axis (as if `y` were pressed until the other face shows). `0` and `Option+0` chain in any order; any pose that is not face-on resets. The classic shader renderer ignores yaw, so there it changes only which way the scroll wheel pushes |
+| `0` | Reset the orientation (the shortest way). Pressed again while face-on, it flips to the other side (the disc tumbles over, as if `t` were pressed until the other face shows); each further press flips again. The "Reset orientation" button in Settings only resets |
+| `Option` + drag | Rotate the disc freely (horizontal = yaw, vertical = pitch). While Option is held the window cannot be dragged, so the drag only rotates the disc |
+| `m` | Metal: steel, brass, copper, black zirconium, anodized titanium |
+| `c` | Hub finish: lit, raised or engraved (switches instantly) |
+| `b` | Music mode: off, sustain, kick, sustain + kick |
+| `u` | Bearing hum on / off |
+| `g` | Switch between the RealityKit renderer and the classic shader renderer |
 
 Settings (default, range). Physics settings apply in both renderers; the Look and Shadow settings work in both renderers too.
 
@@ -35,9 +37,9 @@ Settings (default, range). Physics settings apply in both renderers; the Look an
 | Motion | Push strength | x1.00 | x0.25 to x4 | Multiplies how hard each scroll notch pushes |
 | Motion | Top speed | 60 rad/s | 20 to 120 | Speed limit |
 | Motion | Direction lock | on | on / off | On: an opposing push only brakes and cannot restart the disc the other way until a moment of quiet; off: it passes through zero and reverses |
-| Motion | Rotation step | 15 degrees | 5, 10, 15, 30, 45 | Size of one `T` / `Y` key step |
-| Look | Metal | Steel | 5 metals | The disc's material (`M`) |
-| Look | Hub finish | Lit | Lit, Raised | Marks cut in as glowing channels, or standing proud (`C`) |
+| Motion | Rotation step | 15 degrees | 5, 10, 15, 30, 45 | Size of one `t` / `y` key step |
+| Look | Metal | Steel | 5 metals | The disc's material (`m`) |
+| Look | Hub finish | Lit | Lit, Raised, Engraved | Marks cut in as glowing channels, standing proud, or laser-cut into the hub as dark matte channels with no glow (`c`). In RealityKit the marks are real geometry (a cut with a floor and walls, or a mark standing proud); the classic shader paints them. Engraved in the classic shader is a simpler dark channel with a wall shadow |
 | Look | Glow brightness | 100% | 0 to 200% | Rods, motion arcs and lit hub marks; 0 turns the emission off |
 | Look | Room light | 100% | 30 to 160% | Lighting of the metal (not the glowing parts) |
 | Look | Size | 100% | 40 to 150% | Scales the disc |
@@ -45,16 +47,16 @@ Settings (default, range). Physics settings apply in both renderers; the Look an
 | Shadow | Darkness | 48% | 0 to 85% | Drop-shadow opacity; 0 hides it |
 | Shadow | Spread | x1.00 | x0.3 to x3 | Softness of the shadow's edge |
 | Shadow | Distance | x1.00 | 0 to x2.5 | Offset of the shadow from the disc; 0 puts it directly behind |
-| Sound & Music | Bearing hum | on | on / off | The hum that follows the spin speed (`U`) |
+| Sound & Music | Bearing hum | on | on / off | The hum that follows the spin speed (`u`) |
 | Sound & Music | Hum volume | 100% | 0 to 150% | Scales the hum's loudness |
-| Sound & Music | Music mode | Off | Off, Sustain, Kick, Sustain + Kick | How the music acts on the spin (`B`) |
+| Sound & Music | Music mode | Off | Off, Sustain, Kick, Sustain + Kick | How the music acts on the spin (`b`) |
 | Sound & Music | Sustain | 85% | 0 to 100% | Friction that loud music removes (Sustain modes) |
 | Sound & Music | Kick | 2.0 rad/s | 0 to 6 | Speed added by a full-strength bass beat (Kick modes) |
-| Renderer | Renderer | RealityKit | RealityKit, Shader | RealityKit needs macOS 15; the classic shader stands in while it loads (`G`) |
+| Renderer | Renderer | RealityKit | RealityKit, Shader | RealityKit needs macOS 15; the classic shader stands in while it loads (`g`) |
 
 **The hum rule.** The hum is only heard when no music is playing. Any music activity silences it (fading out over about 0.8 s): a player reporting a track playing, captured player audio above the idle level, or Demo Mode. It returns, fading in over about 3 s, only after 6 seconds of continuous silence, so the gap or crossfade between songs, a quiet passage and a track's fade-out never let it back in. It also stays silent for the first 6 seconds after launch.
 
-**Hub marks.** The interlocked mark is on the front hub and the sign-off mark on the back hub; each hub turns about the disc's own axis so its mark always reads upright and unmirrored, whichever way you tilt or turn the disc. Known limitations: Anodized Titanium's colour-shifting film exists only in the classic shader renderer (RealityKit draws plain titanium grey); the classic renderer shows pitch only and ignores yaw; with Shadow distance at 0 RealityKit leaves a thin dark edge around the disc. If the app-wide mouse modifier is Option, an Option-click that never moves is still "previous visualization"; once it moves it rotates the disc.
+**Hub marks.** The interlocked mark is on the front hub and the sign-off mark on the back hub; each hub turns about the disc's own axis so its mark always reads upright and unmirrored, whichever way you tilt or turn the disc. Known limitations: the classic shader still paints its hub marks (only RealityKit has real relief); Anodized Titanium's colour-shifting film exists only in the classic shader renderer (RealityKit draws plain titanium grey); the classic renderer shows pitch only and ignores yaw; with Shadow distance at 0 RealityKit leaves a thin dark edge around the disc; the Engraved hub finish is lower contrast in the classic shader than in RealityKit, and in black zirconium and titanium the polished face is dim, so the cut reads mainly through its edges. If the app-wide mouse modifier is Option, an Option-click that never moves is still "previous visualization"; once it moves it rotates the disc.
 
 ## Features
 
@@ -63,7 +65,7 @@ Settings (default, range). Physics settings apply in both renderers; the Look an
 - 14 color palettes (classic, phosphor, synthwave, inferno, aurora, ember, ice, mono, viridis, plasma, spectrum, pastel, forest, oceanic) with HDR-boosted variants, and optional palette auto-cycle with crossfade
 - Settings organized as a sidebar — app-wide settings vs. the active visualization's own, with each style's controls remembered per style (apply-to-all toggle). Controls that have no effect on the current style are greyed out with a tooltip explaining why
 - Keyboard shortcuts for common actions and in-window Settings navigation (see below)
-- Track overlay (album art, title and performer via ScriptingBridge): blooms on each song change and settles; hover enlarges it and holds it at full; click brings the player to the front. It stays on screen while a track is playing, alongside the lyrics (corner and opacity under Settings > Track Overlay)
+- Track overlay (album art, title and performer via ScriptingBridge): blooms on each song change and settles; hover enlarges it and holds it at full; click brings the player to the front and restores its window if it is minimized or closed. It stays on screen while a track is playing, alongside the lyrics (corner and opacity under Settings > Track Overlay)
 - Window transparency (per-pixel alpha by default, or uniform opacity) + click-through mode
 - Window border: an outline around the whole window, in normal or borderless mode
 - Demo mode for when no music is playing
@@ -79,17 +81,17 @@ Bare keys, active when the visualizer window or the Settings window is focused (
 
 | Key | Action |
 |---|---|
-| H / L | Previous / next visualization |
-| J / K | Next / previous palette |
-| R | Random visualization |
+| h / l | Previous / next visualization |
+| j / k | Next / previous palette |
+| r | Random visualization |
 | , / . | Previous / next song in the active player (Spotify or Music) |
 | Space | Play / pause the active player |
-| F | Toggle full screen |
+| f | Toggle full screen |
 | ? | Show / hide the shortcut cheat sheet |
 
 The Spinner adds its own keys while it is the active visualization (see above).
 
-Mouse, in the visualizer window, with the **mouse control modifier** held (Shift by default; Off, Shift, Option or Command in Settings > Window): click = previous visualization, right-click = next, middle-click = random, scroll = change palette (scroll down = next). Without a modifier: right-click opens a menu (Settings, Lyrics Settings, Layout Settings, visualization / palette / song controls, lyrics, window border, full screen) and double-click toggles full screen.
+Mouse, in the visualizer window, with the **mouse control modifier** held (Shift by default; Off, Shift, Option or Command in Settings > Window): click = previous visualization, right-click = next, middle-click = random, scroll = change palette (scroll down = next). Without a modifier: right-click opens a menu (Settings, Lyrics Settings, Layout Settings, Acknowledgements, visualization / palette / song controls, lyrics, window border, full screen) and double-click toggles full screen (except on the track card, where a click brings the music player forward).
 
 Menu-bar shortcuts:
 
@@ -136,6 +138,7 @@ What is sent where:
 
 - LRCLIB (https://lrclib.net) receives the track's title, artist, album, and duration to look up lyrics. If the exact lookup finds nothing, a second search by title and artist picks the entry closest in length (within 3 seconds, or within about 30 seconds when approximate matches are on; a recording whose length differs more than that is treated as a different song and skipped). No account is needed.
 - Google's Gemini API receives the lyric lines and the song title and artist, once per song, to translate them. Songs detected as English are never sent.
+- Spotify's public track page (`https://open.spotify.com/track/<id>`) receives the Spotify track id, once per track per session, to read the track's published length. This corrects lyric matching when Spotify reports a shortened length (for example under Crossfade). Nothing else is sent, and it is only done for tracks played in Spotify while lyrics are turned on.
 
 What is stored, all under `~/Library/Application Support/MacVisualizer/`:
 
@@ -151,7 +154,7 @@ Songs with time-synced lyrics on LRCLIB (or in your local folder) are shown. Tra
 ```
 make build      # generates the Xcode project with XcodeGen, then builds a Debug app
 make run        # builds, then opens DerivedData/Build/Products/Debug/MacVisualizer.app
-make test       # runs the full XCTest suite (over 1,200 tests)
+make test       # runs the full XCTest suite (over 1,300 tests)
 make clean      # removes the generated project and DerivedData
 ```
 
@@ -165,10 +168,14 @@ Requires macOS 14.4+, Xcode 16+ and [XcodeGen](https://github.com/yonaskolb/Xcod
 - **Settings.** Open Settings with ⌘, (or the right-click menu). They are saved to `~/Library/Application Support/MacVisualizer/settings.json`, together with the lyrics cache and the Gemini key described above. The sidebar has a Global section (Styles & Presets, Palette Cycle, Post-FX, Analysis, Track Overlay, Lyrics, Layout, Window) and a section for the active visualization (Controls, Appearance, Glow, Bands).
 - **Window.** Window modes are under Settings > Window and the Window Chrome menu: transparency (per-pixel alpha, uniform opacity or opaque), borderless, click-through, always on top, and the window border (off, auto or always).
 
-Other command-line probes (run the same binary): `--render-probe <out.png> [style] [renderMode] [glow]` writes an offscreen PNG of a style (Spinner tokens, comma-separated as the render mode: `a<angle>`, `v<velocity>`, `m<metal index>`, `h<finish index>`, `p<pitchDeg>`, `y<yawDeg>`, `z<zoom>`, `t`, `g1`, `w<pixels>`, and the settings overrides `S<size>`, `G<glow>`, `L<room light>`, `B<spin blur>`, `D<shadow darkness>`, `P<shadow spread>`, `X<shadow distance>`, `K<backdrop gray>`), `--rk-hub-check` (compares the hub texture generator with its reference), `--audio-probe`, `--nowplaying-probe` and `--list-audio-processes`.
+Other command-line probes (run the same binary): `--render-probe <out.png> [style] [renderMode] [glow]` writes an offscreen PNG of a style (Spinner tokens, comma-separated as the render mode: `a<angle>`, `v<velocity>`, `m<metal index>`, `h<finish index>`, `p<pitchDeg>`, `y<yawDeg>`, `z<zoom>`, `t`, `g1`, `w<pixels>`, and the settings overrides `S<size>`, `G<glow>`, `L<room light>`, `B<spin blur>`, `D<shadow darkness>`, `P<shadow spread>`, `X<shadow distance>`, `K<backdrop gray>`), `--acknowledgements-probe <outdir>` (renders the Acknowledgements window content offscreen, each section in light and dark, to PNGs), `--audio-probe`, `--nowplaying-probe` and `--list-audio-processes`.
 
 ## License
 
-Apache License, Version 2.0. See [LICENSE](LICENSE) for the full text, [NOTICE](NOTICE) for attribution credits, and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the full license texts of ported third-party shaders.
+Apache License, Version 2.0. See [LICENSE](LICENSE) for the full text, [NOTICE](NOTICE) for attribution credits, and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the full license texts of ported third-party shaders. All three are shown in the app: choose MacVisualizer > Acknowledgements… (or right-click the visualization), which has Credits, Third-Party Licenses and License tabs rendered from the bundled files.
 
 `Copyright 2026 Ed Espino`
+
+## Trademarks
+
+Spotify is a trademark of Spotify AB. Apple, Apple Music, macOS, Metal and RealityKit are trademarks of Apple Inc. Google and Gemini are trademarks of Google LLC. All other names, including LRCLIB, are the property of their respective owners. mac-visualizer is an independent project and is not affiliated with, sponsored by or endorsed by any of them; the names are used only to describe what the app works with.
