@@ -227,11 +227,14 @@ func makeMaterial(_ k: MatKind, metal: RKMetal, tex: RKPuckTextures, tune: RKTun
         }
     case .hubTop(let level):
         let tone: Float = hubToneLevels[level]
-        let topLevel: V3 = raisedTint(metal.f0) * tone
+        let topBase: V3 = raisedTint(metal.f0)
+        let topLevel: V3 = topBase * tone
         m.baseColor = .init(tint: lin(topLevel)); m.metallic = 1.0; m.roughness = 0.40
     case .hubTopWall(let level):
         let tone: Float = hubToneLevels[level]
-        let wallLevel: V3 = raisedTint(metal.f0) * (tone * hubRaisedWallDarkening)
+        let wallGain: Float = tone * hubRaisedWallDarkening
+        let wallBase: V3 = raisedTint(metal.f0)
+        let wallLevel: V3 = wallBase * wallGain
         m.baseColor = .init(tint: lin(wallLevel)); m.metallic = 1.0; m.roughness = 0.34
     case .hubChamfer:
         m.baseColor = steel(V3(0.6, 0.6, 0.6)); m.metallic = 1.0; m.roughness = 0.14
