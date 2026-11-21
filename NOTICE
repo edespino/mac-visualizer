@@ -1,0 +1,109 @@
+mac-visualizer
+Copyright 2026 Ed Espino
+
+This product includes software developed by Ed Espino (https://github.com/eespino).
+
+Licensed under the Apache License, Version 2.0. See LICENSE for the full text.
+
+---
+
+# Notices and Credits
+
+mac-visualizer is original work, but several of its algorithms and visual concepts were inspired by other open-source audio-visualization projects. None of the source code from those projects is included in this app — only algorithmic ideas and visual aesthetics, neither of which is protected by copyright.
+
+This file exists to credit those projects and document what inspired what, in the spirit of open-source citizenship.
+
+For third-party material that WAS ported into this app (Metal shader ports and adaptations) together with the full license texts required by those licenses, see THIRD_PARTY_NOTICES.md.
+
+## Algorithmic inspiration
+
+### `BeatDetector` (Sources/Core/BeatDetector.swift)
+Inspired by the adaptive onset-detection algorithm in **[goom2k4](https://github.com/goom-project/goom)** (`plugins/audio/goom2k4/sound_tester.c`). License: LGPL-2.1. Our implementation is clean-room Swift — no source code was copied, only the algorithm concept (aged loudness envelope + adaptive threshold with periodic retuning toward a target onset rate). Tuning constants were adapted to our 0–1 amplitude domain.
+
+### `Delaunay` (Sources/Core/Delaunay.swift)
+Standard Bowyer–Watson incremental triangulation, plus straightforward Voronoi-dual computation. Both are well-documented in graphics textbooks and on Wikipedia. No third-party implementation was referenced.
+
+### `MarchingSquares` (Sources/Core/MarchingSquares.swift)
+Standard marching-squares iso-line extraction with the "separate" tiebreak for saddle cases. Textbook algorithm. No third-party implementation was referenced.
+
+## Visual aesthetics
+
+### `JoyPlotVisualizer`
+Style inspired by Joy Division's *Unknown Pleasures* album cover (1979) and similar visualizations in **[stereoDrift](https://github.com/stereoDrift/stereoDrift.github.io)** (`renderJoyPlotChart`). License: unknown — only the visual concept was used, no JS code.
+
+### `HeightfieldVisualizer`
+Visual concept (audio-driven 3D grid mesh) inspired by **[libvisual / Nebulus](https://github.com/Libvisual/libvisual)** (`plugins/actor/nebulus`). License: GPL-2.0. The original was a 16×16 heightfield with a rotating camera. Our implementation is independent Swift + Metal.
+
+### `VoronoiVisualizer`
+Visual concept (audio-modulated Voronoi tessellation) inspired by **[stereoDrift](https://github.com/stereoDrift/stereoDrift.github.io)** (`renderVoronoiChart`). The cells/blobs/softCells render-mode split is original to this project. The shape-evolution modes (fixed/cycle/drift/perTrack) are original.
+
+### `LavaLampVisualizer`
+Visual concept (audio-driven metaball iso-contours) inspired by **[stereoDrift](https://github.com/stereoDrift/stereoDrift.github.io)** (`lavaLamp` mode, which uses `d3.contourDensity`). Both shader and marching-squares render modes are independent Swift/Metal implementations.
+
+### `IrisVisualizer` and `TricentricVisualizer`
+Independent Swift reimplementations inspired by the **Iris** and **Tricentric** presets from **[Vissonance](https://github.com/tariqksoliman/Vissonance)** by Tariq Soliman. License: MIT. The originals are THREE.js/WebGL; our implementations are independent Swift reimplementations of their geometry and audio-response formulas (petal-ring with loudness-driven color and swell; concentric triangle tunnel with loudness-driven roll), adapted to this app's palette system, stereo band split, and CPU vertex-emit pipeline.
+
+MIT License notice for Vissonance:
+
+    Copyright (c) Tariq Soliman
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+### `PlasmaVisualizer`
+Visual concept (demoscene plasma field) inspired by **[libvisual](https://github.com/Libvisual/libvisual)** (`plugins/actor/plazma`). License: GPL-2.0. Our implementation is an independent, clean-room Metal fragment shader (`plasma_fs`) using the standard sum-of-sines plasma formula; no source code was copied.
+
+### `BumpscopeVisualizer`
+Visual concept (audio-lit bump-mapped heightfield) inspired by **[libvisual](https://github.com/Libvisual/libvisual)** (`plugins/actor/bumpscope`). License: GPL-2.0. Our implementation is an independent, clean-room Metal fragment shader (`bumpscope_fs`) using standard per-pixel diffuse lighting; no source code was copied.
+
+### Color palettes `viridis` and `plasma` (Sources/Core/ColorPalette.swift)
+The `viridis` and `plasma` gradient stops are sampled from matplotlib's colormaps of the same names by Stéfan van der Walt and Nathaniel Smith (**[BIDS/colormap](https://github.com/BIDS/colormap)**). These colormaps are released under CC0 1.0 (public domain); no attribution is legally required. Credited here as a courtesy.
+
+## Algorithmic concepts (standard graphics)
+
+The following standard techniques are used and are credited collectively rather than to any specific project: Gaussian metaballs (`exp(-r²·K)` falloff), per-pixel Voronoi cell rendering via nearest-seed search, palette-driven HDR coloring, MPS Gaussian blur for bloom and soft-edge effects, value noise for procedural drift, and standard projection matrices for 3D-tilted grids.
+
+## Network services (lyrics overlay)
+
+The lyrics overlay consumes two public network APIs over their public HTTP endpoints; no third-party code from either is included in this app:
+
+- **[LRCLIB](https://lrclib.net)** — the public lyrics API used to look up time-synced lyrics (no account required).
+- **Google Gemini API** (https://ai.google.dev) — used, with the user's own API key, to translate lyric lines.
+
+## Projects we surveyed but did NOT integrate
+
+The following projects were studied during early-stage research (a local collection of audio-visualization repositories). Their algorithms and aesthetic ideas may have influenced our design choices, but no source code from any of them was integrated into this app:
+
+- **[projectM](https://github.com/projectM-visualizer/projectm)** (LGPL-2.1) — MilkDrop reimplementation; considered for direct integration but not pursued.
+- **[butterchurn](https://github.com/jberg/butterchurn)** (MIT) — WebGL MilkDrop port; considered as a reference for a future Metal port.
+- **[MilkDrop 3](https://github.com/milkdrop2077/MilkDrop3)** (BSD-3) — DirectX-based Windows visualizer; visual reference only.
+- **[UnityAudioVisualizer](https://github.com/keijiro/UnityAudioVisualizer)** (Apache-2.0) — HDR particle gradients + wireframe shader algorithm; we wrote independent Metal equivalents.
+- **[AudioKit](https://github.com/AudioKit/AudioKit)** (MIT/Apache-2.0) — Swift audio framework; not currently a dependency.
+- **[AudioVisualizerKit](https://github.com/AudioVisualizerKit/AudioVisualizerKit)** — FFT + windowing reference; we use vDSP directly.
+- **[libvisual](https://github.com/Libvisual/libvisual)** plugins (GPL-2.0) — jakdaw, blursk, oinksie, corona — algorithm and aesthetic survey only. (goom2k4, nebulus, plazma and bumpscope from the same collection also informed specific features and are credited individually above.)
+- **[SwiftUI-AudioKit-Visualizer](https://github.com/AudioKit/Cookbook)**, **[AudioPlaybackVisualizer](https://github.com/0xLeif/AudioPlaybackVisualizer)**, **[VisuAc](https://github.com/microcosm/VisuAc)**, **[stereoDrift](https://github.com/stereoDrift/stereoDrift.github.io)**, **[react-native-waveform-player](https://github.com/markusewerth/react-native-waveform-player)**, **[synesthesia](https://github.com/jameswebster/synesthesia)**, **[kaleidosync](https://github.com/zachwinter/kaleidosync)**, **[wavesync](https://github.com/cellofellow/wavesync)** — design and feature survey only.
+
+## Future LGPL compliance (not yet applicable)
+
+If `libprojectM` is ever embedded into this app, the following compliance steps apply per LGPL-2.1 §6:
+- Dynamic-link `libprojectM.dylib` (not static-link) so users can substitute their own copy
+- Bundle the LGPL-2.1 license text as an app resource
+- Acknowledge projectM by name in the About panel with a link to its source repository
+- Code-sign the bundled `.dylib` with the app's identity
+
+This is not a current obligation — no LGPL code is currently linked.

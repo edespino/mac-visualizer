@@ -1,0 +1,97 @@
+name: MacVisualizer
+options:
+  # Placeholder reverse-DNS prefix derived from the author name "Ed Espino"
+  # (per LICENSE/NOTICE). NOT a claim that edespino.com is a registered/owned
+  # domain. Confirm or replace with the real reverse-DNS id before distribution.
+  bundleIdPrefix: com.edespino
+  deploymentTarget:
+    macOS: "14.4"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+  configs:
+    Debug:
+      ENABLE_TESTABILITY: YES
+targets:
+  MacVisualizerCore:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/Core
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.edespino.MacVisualizerCore
+    info:
+      path: Sources/Core/Info.plist
+  MacVisualizer:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/App
+      - Sources/Rendering
+      - Sources/Services
+      - path: Resources/AppIcon.icns
+        buildPhase: resources
+      # Ship the license and attribution files inside the .app bundle so the
+      # MIT/CC-BY notices travel with every distributed copy of the work.
+      - path: LICENSE
+        buildPhase: resources
+      - path: NOTICE
+        buildPhase: resources
+      - path: THIRD_PARTY_NOTICES.md
+        buildPhase: resources
+    dependencies:
+      - target: MacVisualizerCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.edespino.MacVisualizer
+        # Exposes the Obj-C exception shim (ObjCExceptionCatcher) to Swift so
+        # ScriptingBridge KVC can be wrapped in @try/@catch (see PlayerReader).
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/App/MacVisualizer-Bridging-Header.h
+        # Hardened Runtime on; App Sandbox is disabled in the entitlements
+        # file because the Core Audio process tap captures other processes'
+        # audio, which the sandbox forbids. See MacVisualizer.entitlements.
+        CODE_SIGN_ENTITLEMENTS: MacVisualizer.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        # Keep local Debug builds working with no developer team: ad-hoc
+        # "Sign to Run Locally". CI / distribution can override with a real
+        # identity + team.
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Automatic
+    info:
+      path: Sources/App/Info.plist
+      properties:
+        CFBundleDisplayName: Mac Visualizer
+        CFBundleIconFile: AppIcon
+        # XcodeGen defaults these to literal 1.0/1; point them at the build
+        # settings so the bundle reports the project.yml version.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: "14.4"
+        NSHighResolutionCapable: true
+        NSAudioCaptureUsageDescription: "Mac Visualizer reads the audio from Spotify or Apple Music to draw the spectrum visualizer."
+        NSAppleEventsUsageDescription: "Mac Visualizer reads the current track from Apple Music or Spotify to show it on screen."
+  MacVisualizerCoreTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/CoreTests
+    dependencies:
+      - target: MacVisualizerCore
+    info:
+      path: Tests/CoreTests/Info.plist
+schemes:
+  MacVisualizer:
+    build:
+      targets:
+        MacVisualizer: all
+        MacVisualizerCoreTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - MacVisualizerCoreTests

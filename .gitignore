@@ -1,0 +1,24 @@
+# XcodeGen output (regenerated from project.yml)
+MacVisualizer.xcodeproj/
+# XcodeGen-generated Info.plists
+Sources/**/Info.plist
+Tests/**/Info.plist
+# Build output
+DerivedData/
+build/
+# macOS
+.DS_Store
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+# Secrets and user data (normally live in ~/Library/Application Support/MacVisualizer;
+# these patterns guard against a stray copy ever landing in the repo)
+gemini-key
+settings.json
+.env
+.env.*
+*.pem
+*.p12
+# Derived from copyrighted lyrics: never commit
+lyrics/
+*.lrc

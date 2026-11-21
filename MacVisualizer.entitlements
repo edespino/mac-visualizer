@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  App Sandbox is intentionally DISABLED.
+
+	  Mac Visualizer captures audio from OTHER processes (Spotify, Apple
+	  Music, etc.) via the Core Audio process-tap API
+	  (CATapDescription / AudioHardwareCreateProcessTap) and creates a
+	  private system aggregate device (AudioHardwareCreateAggregateDevice).
+	  Both operations reach outside the app's own process and are not
+	  permitted inside the App Sandbox. Enabling the sandbox would let the
+	  app build and launch but silently fail to capture any audio at
+	  runtime, defeating its only purpose.
+
+	  Hardened Runtime is enabled instead (ENABLE_HARDENED_RUNTIME=YES in
+	  project.yml). The entitlements below are the Hardened Runtime
+	  resource-access entitlements the app actually needs.
+	-->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+
+	<!-- Core Audio process tap / audio capture (Hardened Runtime mic/audio access). -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+
+	<!-- ScriptingBridge now-playing queries to Apple Music / Spotify. -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+</dict>
+</plist>
