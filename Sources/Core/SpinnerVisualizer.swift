@@ -65,26 +65,58 @@ public enum SpinnerTilt {
     }
 }
 
+/// The spin state shared by the Disc Spinner and the Tri-wing Spinner: angle, speed and the direction lock (inside
+/// `SpinnerPhysics`) and the orientation (pitch and yaw with their targets). Switching between the two styles
+/// therefore continues the same motion and pose. Everything else (settings, music drive, light pulse) is per style.
+public final class SpinnerSharedState {
+    /// The app's one shared instance (what `VisualizerStyle.makeVisualizer()` hands to both spinner styles).
+    public static let shared = SpinnerSharedState()
+    public var physics = SpinnerPhysics()
+    public var orientation = SpinnerOrientation()
+    /// Wall-clock time of the last advance, so the first frame after a switch measures dt from the other style's last frame.
+    public var lastTime: TimeInterval?
+    public init() {}
+}
+
 /// A spinning machined-metal toy driven by the scroll wheel (see `SpinnerInput`).
 /// Drawn entirely by `spinner_fs`; `makeVertices` only advances the physics.
 /// Uses wall-clock time, not `particleSpeed`.
 public final class SpinnerVisualizer: Visualizer {
-    public private(set) var physics = SpinnerPhysics()
+    /// The spin state (see `SpinnerSharedState`). A standalone `SpinnerVisualizer()` owns a private one.
+    public let shared: SpinnerSharedState
+    public private(set) var physics: SpinnerPhysics {
+        get { shared.physics }
+        set { shared.physics = newValue }
+    }
     public private(set) var flash: Float = 0
     public private(set) var frameDt: Double = 0
     public private(set) var aspect: Float = 1
-    private var lastTime: TimeInterval?
+    private var lastTime: TimeInterval? {
+        get { shared.lastTime }
+        set { shared.lastTime = newValue }
+    }
     private var frozen = false
     /// Pitch and yaw of the puck (see `SpinnerOrientation` for the convention).
-    public private(set) var orientation = SpinnerOrientation()
+    public private(set) var orientation: SpinnerOrientation {
+        get { shared.orientation }
+        set { shared.orientation = newValue }
+    }
     /// Pitch in radians (the classic shader renderer shows pitch only).
     public var currentTilt: Double { orientation.pitch }
     /// Yaw in radians (RealityKit only).
     public var currentYaw: Double { orientation.yaw }
     private var music = SpinnerMusicDrive()
     private var clock: Double = 0
+    /// Tri-wing light level (0...1) for this frame: the beat pulse of the edge lights (`SpinnerLightPulse`). 1 unless
+    /// `beatLights` is on. The probe can pin it with `debugLightLevel`.
+    public private(set) var lightLevel: Float = 1
+    private var lightPulse = SpinnerLightPulse()
+    private var debugLight: Float?
 
-    public init() {}
+    /// Probe hook: forces the light level (0...1) for stills.
+    public func debugLightLevel(_ level: Float) { debugLight = level; lightLevel = level }
+
+    public init(shared: SpinnerSharedState = SpinnerSharedState()) { self.shared = shared }
 
     /// True while the back face shows (the front face's normal points away from the viewer).
     public var isBackFacing: Bool { !orientation.facesViewerFront }
@@ -136,6 +168,10 @@ public final class SpinnerVisualizer: Visualizer {
         let dt: Double = min(max(elapsed, 0), 0.1)
         lastTime = now
         advance(dt: dt, impulse: impulse, rms: frame.rms, bassEnergy: frame.bassEnergy, now: now, spinner: spinner)
+        // Beats come from the analysis queue through the inbox (the lyric beat follower's pulses); music is "playing" while
+        // the frame carries a track id (the same signal the hum gate uses).
+        let beat: Float = SpinnerLightInbox.shared.drain(now: now)
+        lightLevel = debugLight ?? lightPulse.update(dt: dt, beatStrength: beat, trackPlaying: frame.trackId != nil, settings: spinner)
         SpinnerInput.shared.noteFrame(now: now, speed: physics.velocity, impulse: impulse != 0)
         return []
     }

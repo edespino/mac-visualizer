@@ -38,6 +38,8 @@ public struct SpinnerSettings: Codable, Equatable {
     public static let humVolumeRange: ClosedRange<Double> = 0...1.5
     public static let musicSustainRange: ClosedRange<Double> = 0...1
     public static let musicKickRange: ClosedRange<Double> = 0...6
+    public static let restingGlowRange: ClosedRange<Double> = 0...1
+    public static let beatGlowRange: ClosedRange<Double> = 0...1
     /// The allowed key-step sizes in degrees (each divides 360 and 90, so exact face-on and edge-on stay reachable).
     public static let rotationStepChoices: [Int] = [5, 10, 15, 30, 45]
 
@@ -46,6 +48,8 @@ public struct SpinnerSettings: Codable, Equatable {
     public static let defaultShadowDarkness: Double = 0.48
     public static let defaultMusicSustain: Double = 0.85
     public static let defaultMusicKick: Double = 2.0
+    public static let defaultRestingGlow: Double = 0.5
+    public static let defaultBeatGlow: Double = 1.0
 
     /// `value` limited to `range`; a non-finite value becomes the nearest bound (NaN: `fallback`).
     static func clamp(_ value: Double, _ range: ClosedRange<Double>, fallback: Double) -> Double {
@@ -75,7 +79,24 @@ public struct SpinnerSettings: Codable, Equatable {
 
     // MARK: Look
 
+    /// Which body is drawn: the disc or the tri-wing (RealityKit only; the classic shader always draws the disc).
+    public var model: SpinnerModel
+    /// Tri-wing only: the glowing tubes at the wing tips. The disc's rods are unaffected.
+    public var edgeLights: Bool
+    /// Tri-wing with edge lights: original wing colours, or three colours taken from the app's current palette. The disc's
+    /// rods and the classic shader are unaffected.
+    public var lightColors: SpinnerLightColors
+    /// Tri-wing with edge lights: the lights pulse on the music's beat. Off = steady (level 1).
+    public var beatLights: Bool
+    /// Light level between beats, as a fraction of Glow brightness (used while `beatLights` is on).
+    public var restingGlow: Double { didSet { restingGlow = Self.clamp(restingGlow, Self.restingGlowRange, fallback: Self.defaultRestingGlow) } }
+    /// Light level a full beat reaches, as a fraction of Glow brightness (never below `restingGlow` when applied).
+    public var beatGlow: Double { didSet { beatGlow = Self.clamp(beatGlow, Self.beatGlowRange, fallback: Self.defaultBeatGlow) } }
     public var metal: SpinnerMetal
+    /// Tri-wing: the metal of the three wing plates (same as the body by default). RealityKit only.
+    public var plateMetal: SpinnerPlateMetal
+    /// Tri-wing: the metal of the three bosses under the jewel settings (same as the body by default). RealityKit only.
+    public var bossMetal: SpinnerBossMetal
     public var hubFinish: SpinnerHubFinish
     /// Multiplier on rod and lit-mark emission (0 = no glow).
     public var glowBrightness: Double { didSet { glowBrightness = Self.clamp(glowBrightness, Self.glowBrightnessRange, fallback: 1.0) } }
@@ -118,7 +139,15 @@ public struct SpinnerSettings: Codable, Equatable {
         topSpeed = Self.defaultTopSpeed
         directionLock = true
         rotationStepDegrees = Self.defaultRotationStep
+        model = .disc
+        edgeLights = true
+        lightColors = .original
+        beatLights = false
+        restingGlow = Self.defaultRestingGlow
+        beatGlow = Self.defaultBeatGlow
         metal = .steel
+        plateMetal = .sameAsBody
+        bossMetal = .sameAsBody
         hubFinish = .lit
         glowBrightness = 1.0
         roomLight = 1.0
@@ -139,7 +168,8 @@ public struct SpinnerSettings: Codable, Equatable {
 extension SpinnerSettings {
     private enum CodingKeys: String, CodingKey {
         case friction, pushStrength, topSpeed, directionLock, rotationStepDegrees
-        case metal, hubFinish, glowBrightness, roomLight, size, spinBlur
+        case model, edgeLights, lightColors, beatLights, restingGlow, beatGlow
+        case metal, plateMetal, bossMetal, hubFinish, glowBrightness, roomLight, size, spinBlur
         case shadowDarkness, shadowSpread, shadowDistance
         case humEnabled, humVolume, musicMode, musicSustain, musicKick
         case renderer
@@ -154,7 +184,15 @@ extension SpinnerSettings {
         topSpeed = try c.decodeIfPresent(Double.self, forKey: .topSpeed) ?? d.topSpeed
         directionLock = try c.decodeIfPresent(Bool.self, forKey: .directionLock) ?? d.directionLock
         rotationStepDegrees = try c.decodeIfPresent(Int.self, forKey: .rotationStepDegrees) ?? d.rotationStepDegrees
+        model = try c.decodeLossyEnum(SpinnerModel.self, forKey: .model, default: d.model)
+        edgeLights = try c.decodeIfPresent(Bool.self, forKey: .edgeLights) ?? d.edgeLights
+        lightColors = try c.decodeLossyEnum(SpinnerLightColors.self, forKey: .lightColors, default: d.lightColors)
+        beatLights = try c.decodeIfPresent(Bool.self, forKey: .beatLights) ?? d.beatLights
+        restingGlow = try c.decodeIfPresent(Double.self, forKey: .restingGlow) ?? d.restingGlow
+        beatGlow = try c.decodeIfPresent(Double.self, forKey: .beatGlow) ?? d.beatGlow
         metal = try c.decodeLossyEnum(SpinnerMetal.self, forKey: .metal, default: d.metal)
+        plateMetal = try c.decodeLossyEnum(SpinnerPlateMetal.self, forKey: .plateMetal, default: d.plateMetal)
+        bossMetal = try c.decodeLossyEnum(SpinnerBossMetal.self, forKey: .bossMetal, default: d.bossMetal)
         hubFinish = try c.decodeLossyEnum(SpinnerHubFinish.self, forKey: .hubFinish, default: d.hubFinish)
         glowBrightness = try c.decodeIfPresent(Double.self, forKey: .glowBrightness) ?? d.glowBrightness
         roomLight = try c.decodeIfPresent(Double.self, forKey: .roomLight) ?? d.roomLight
@@ -189,13 +227,36 @@ extension SpinnerSettings {
         humVolume = Self.clamp(humVolume, Self.humVolumeRange, fallback: 1.0)
         musicSustain = Self.clamp(musicSustain, Self.musicSustainRange, fallback: Self.defaultMusicSustain)
         musicKick = Self.clamp(musicKick, Self.musicKickRange, fallback: Self.defaultMusicKick)
+        restingGlow = Self.clamp(restingGlow, Self.restingGlowRange, fallback: Self.defaultRestingGlow)
+        beatGlow = Self.clamp(beatGlow, Self.beatGlowRange, fallback: Self.defaultBeatGlow)
+    }
+}
+
+/// Which spinner style's profile governs something that runs whether or not a spinner is on screen (the hum).
+public enum SpinnerProfileSelection {
+    /// The active style when it is a spinner; otherwise the spinner style that was most recently active; otherwise the
+    /// Disc Spinner.
+    public static func style(active: VisualizerStyle, lastActive: VisualizerStyle?) -> VisualizerStyle {
+        if active.isSpinnerFamily { return active }
+        if let last = lastActive, last.isSpinnerFamily { return last }
+        return .spinner
     }
 }
 
 extension VisualizerSettings {
-    /// The Spinner's settings, whichever style is active (a missing profile reads as the defaults). The renderers and
-    /// the hum read this once per frame from the frame's settings snapshot.
-    public var spinnerSettings: SpinnerSettings {
-        profiles[.spinner]?.spinner ?? SpinnerSettings()
+    /// The settings a renderer or the hum should use, from the governing spinner style's own profile (a missing
+    /// profile reads as that style's defaults). The model is derived from the STYLE (the stored `model` field is
+    /// only a migration input), and the Tri-wing Spinner always uses RealityKit whatever its saved `renderer` says.
+    public func spinnerSettings(lastActive: VisualizerStyle?) -> SpinnerSettings {
+        let style: VisualizerStyle = SpinnerProfileSelection.style(active: visualizerStyle, lastActive: lastActive)
+        var sp: SpinnerSettings = profiles[style]?.spinner ?? StyleProfile.defaults(for: style).spinner
+        let model: SpinnerModel = style.spinnerModel ?? .disc
+        sp.model = model
+        if model == .triWing { sp.renderer = .realityKit }
+        return sp
     }
+
+    /// `spinnerSettings(lastActive:)` with no history: the active spinner style's settings, else the Disc Spinner's.
+    /// The renderers read this once per frame from the frame's settings snapshot (the active style is a spinner then).
+    public var spinnerSettings: SpinnerSettings { spinnerSettings(lastActive: nil) }
 }

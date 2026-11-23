@@ -59,6 +59,9 @@ struct MetalView: NSViewRepresentable {
         let model: RenderModel
         let renderer: MetalRenderer?
         private var currentStyle: VisualizerStyle
+        /// The spinner style (Disc or Tri-wing) that was most recently active, so the bearing hum (driven in every style)
+        /// reads that style's profile while another style is on screen. nil until a spinner style has been shown.
+        private var lastSpinnerStyle: VisualizerStyle?
         private var visualizer: Visualizer
         /// Idle clock. Seeded to now so a fresh launch does not fade before the
         /// first frame. Synthetic fallback frames do not count as music.
@@ -77,8 +80,9 @@ struct MetalView: NSViewRepresentable {
             self.renderer = MetalRenderer(pixelFormat: .bgra8Unorm)
             self.currentStyle = model.settings.effectiveStyle
             self.visualizer = model.settings.effectiveStyle.makeVisualizer()
-            // Start the RealityKit scene setup (background) at launch when the Spinner is the saved style and RealityKit is the chosen renderer (the default on macOS 15+); the shader draws until it is ready.
-            if currentStyle == .spinner, let r = renderer, model.settings.spinnerSettings.renderer == .realityKit {
+            if currentStyle.isSpinnerFamily { lastSpinnerStyle = currentStyle }
+            // Start the RealityKit scene setup (background) at launch when a spinner style is the saved style and RealityKit is its renderer (always for the Tri-wing Spinner; the default for the Disc Spinner on macOS 15+). The Disc Spinner's shader draws until it is ready; the Tri-wing Spinner stays empty until then.
+            if currentStyle.isSpinnerFamily, let r = renderer, model.settings.spinnerSettings.renderer == .realityKit {
                 RealitySpinnerHost.shared.beginSetupIfNeeded(device: r.device)
             }
         }
@@ -101,8 +105,9 @@ struct MetalView: NSViewRepresentable {
             if style != currentStyle {
                 currentStyle = style
                 visualizer = style.makeVisualizer()
-                // Begin RealityKit setup as soon as the Spinner becomes active (if RealityKit is the chosen renderer); the shader shows until it is ready, then crossfades.
-                if style == .spinner, settings.spinnerSettings.renderer == .realityKit {
+                if style.isSpinnerFamily { lastSpinnerStyle = style }
+                // Begin RealityKit setup as soon as a spinner style becomes active (if RealityKit is its renderer); the Disc Spinner's shader shows until it is ready, then crossfades. Setup is shared: switching between the two spinner styles does not rebuild.
+                if style.isSpinnerFamily, settings.spinnerSettings.renderer == .realityKit {
                     RealitySpinnerHost.shared.beginSetupIfNeeded(device: renderer.device)
                 }
                 // Clear any stale trail from the previous style before the
@@ -124,12 +129,12 @@ struct MetalView: NSViewRepresentable {
             var active = idleFade.isActive(now: now, sample: audioSample)
             // Hold the scene visible while the spinner is in use, and drive the
             // bearing hum (strictly silent whenever there is music activity).
-            let isSpinner = style == .spinner
+            let isSpinner = style.isSpinnerFamily
             if isSpinner {
                 let up = ProcessInfo.processInfo.systemUptime
                 if SpinnerInput.shared.presence.isHeld(now: up) { active = true }
             }
-            let spinnerSettings: SpinnerSettings = settings.spinnerSettings
+            let spinnerSettings: SpinnerSettings = settings.spinnerSettings(lastActive: lastSpinnerStyle)
             let trackPlaying: Bool = model.currentTrackId != nil
             model.spinnerHum.update(
                 now: now, speed: SpinnerInput.shared.currentSpeed,

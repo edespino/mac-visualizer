@@ -74,6 +74,9 @@ Visual concept (audio-lit bump-mapped heightfield) inspired by **[libvisual](htt
 ### Color palettes `viridis` and `plasma` (Sources/Core/ColorPalette.swift)
 The `viridis` and `plasma` gradient stops are sampled from matplotlib's colormaps of the same names by Stéfan van der Walt and Nathaniel Smith (**[BIDS/colormap](https://github.com/BIDS/colormap)**). These colormaps are released under CC0 1.0 (public domain); no attribution is legally required. Credited here as a courtesy.
 
+### Spinner, Tri-wing model
+The watch-movement styling of the Tri-wing Spinner model (an engraved ring around a visible bearing, jewels in gold settings, blued screws, stepped wings and blue cap jewels) was inspired by the watches of **Richard Paige (RPaige)**, whose Wrocket watch shows a vintage American pocket-watch movement behind a display back. Inspiration only: the shape, geometry, marks and lettering are original to this project, and no artwork, names or designs from those watches are used. Credited with thanks; this credit does not imply endorsement.
+
 ## Algorithmic concepts (standard graphics)
 
 The following standard techniques are used and are credited collectively rather than to any specific project: Gaussian metaballs (`exp(-r²·K)` falloff), per-pixel Voronoi cell rendering via nearest-seed search, palette-driven HDR coloring, MPS Gaussian blur for bloom and soft-edge effects, value noise for procedural drift, and standard projection matrices for 3D-tilted grids.

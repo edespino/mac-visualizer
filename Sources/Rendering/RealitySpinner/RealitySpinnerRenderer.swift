@@ -41,6 +41,7 @@ enum RKPass { case puckOnly, puckGround, groundOnly, groundNoKey }
 struct RKFrameParams {
     var pitchRad: Float, yawRad: Float, spinRad: Float, omega: Float   // orientation: yaw after pitch in screen space
     var metal: Int, hubFinish: Int   // hubFinish: 0 lit, 1 raised
+    var plateMetal: Int, bossMetal: Int   // tri-wing: EFFECTIVE metal indices of the wing plates and the bosses (0 steel ... 4 titanium)
     var zoom: Float                  // 1 = same on-screen size as the shader (aspect handled by the caller)
     var width: Int, height: Int
     var transparent: Bool            // per-pixel alpha or window opacity: drop shadow via difference pass
@@ -53,6 +54,10 @@ struct RKFrameParams {
     var shadowDarkness: Float        // peak shadow opacity
     var shadowSpread: Float          // multiplier on the shadow blur sigma
     var shadowDistance: Float        // multiplier on the shadow's offset
+    var model: Int                   // SpinnerModel index: 0 disc, 1 tri-wing
+    var edgeLights: Bool             // tri-wing edge-light tubes
+    var lightLevel: Float            // tri-wing light level 0...1 (beat pulse); 1 unless the model is tri-wing with edge lights on
+    var lightColors: [V3]?           // tri-wing wing colours (three, quantised, brightest channel 1) when the lights follow the palette; nil = original
 }
 
 /// Mirrors `RKCopyUniforms` in Shaders.metal. The render target holds a square region centred on the puck; the copy
@@ -80,10 +85,13 @@ final class RealitySpinnerRenderer {
     let shadowLight = DirectionalLight()
     let sort = ModelSortGroup(depthPass: nil)
     var partEntities: [(ModelEntity, MatKind)] = []
+    /// The Tri-wing model (built at setup beside the disc; the groups are switched, never rebuilt).
+    var tw: RKTriWing?
     var arcFaceEnt: [ModelEntity] = [], arcWallEnt: [ModelEntity] = []
     var tex: RKPuckTextures!
     var tune = RKTuning()
     var currentMetal = -1
+    var currentPlate = -1, currentBoss = -1
     var currentMark = -1
     var currentGlow: Float = -1
     var curRoll = Float.nan, curRoom = Float(-1), curShadowDistance = Float(-1)
@@ -162,7 +170,7 @@ final class RealitySpinnerRenderer {
     // one-time build (called with CPU data produced on a background queue)
     // ------------------------------------------------------------------------------------------
     /// Creates every RealityKit resource and the scene. Yields to the main run loop regularly so the app keeps drawing.
-    func build(geometry g: RKGeometryCPU, images: RKImages, lap: @MainActor (String) -> Void) async throws {
+    func build(geometry g: RKGeometryCPU, images: RKImages, triWing: TWGeometryCPU?, lap: @MainActor (String) -> Void) async throws {
         var lastYield = DispatchTime.now().uptimeNanoseconds
         func maybeYield() async {
             let n = DispatchTime.now().uptimeNanoseconds
@@ -218,6 +226,13 @@ final class RealitySpinnerRenderer {
         spin.addChild(gDetail); spin.addChild(gRods); spin.addChild(gWeb); spin.addChild(gOv); spin.addChild(gArc)
         gOv.isEnabled = false; gArc.isEnabled = false
         tilt.addChild(spin); tilt.addChild(hub)
+        if let triGeometry = triWing {
+            let t = RKTriWing()
+            try await t.build(geometry: triGeometry, sort: sort, step: { await maybeYield() })
+            tilt.addChild(t.spin); tilt.addChild(t.hub)
+            tw = t
+            lap("tri-wing entities")
+        }
         renderer.entities.append(tilt)
         applyMaterials(metal: 0, finish: 0, glow: 1)
         ground.position = [0, 0, groundZ]
@@ -228,7 +243,7 @@ final class RealitySpinnerRenderer {
         renderer.entities.append(cam); renderer.activeCamera = cam
         key.light.intensity = 800
         key.light.color = NSColor(white: 1, alpha: 1)
-        let keyDirection: V3 = simd_normalize(V3(-0.55, 0.60, 0.58))
+        let keyDirection: V3 = simd_normalize(V3(-0.55, 0.60, 0.58))   // TriWingCrystal.keyLight mirrors these numbers
         key.look(at: .zero, from: keyDirection * 10, relativeTo: nil)
         key.shadow = DirectionalLightComponent.Shadow(shadowProjection: .fixed(zNear: 1, zFar: 30, orthographicScale: 3.2), depthBias: 1.0)
         renderer.entities.append(key)
@@ -261,16 +276,20 @@ final class RealitySpinnerRenderer {
     /// every material (the hub tints derive from the body metal; glow scales every emissive intensity); a finish change
     /// rebuilds only the hub's face and mark meshes and switches which mark meshes are shown. All meshes exist from setup,
     /// so none of this regenerates anything. Glow is quantized to 1/40 so a slider drag does not rebuild on every tick.
-    func applyMaterials(metal: Int, finish: Int, glow: Float) {
+    func applyMaterials(metal: Int, finish: Int, glow: Float, plate: Int = -1, boss: Int = -1) {
         let mi = min(max(metal, 0), Self.metalNames.count - 1)
+        let pi = plate < 0 ? mi : min(max(plate, 0), Self.metalNames.count - 1)
+        let bi = boss < 0 ? mi : min(max(boss, 0), Self.metalNames.count - 1)
         let quantized: Float = (min(max(glow, 0), 2) * 40).rounded() / 40
-        if mi == currentMetal && finish == currentMark && quantized == currentGlow { return }
+        let discUnchanged: Bool = (mi == currentMetal && finish == currentMark && quantized == currentGlow)
+        if discUnchanged && pi == currentPlate && bi == currentBoss { return }
         let m = rkMetals[Self.metalNames[mi]]!
         tune.hubFinish = finish
         tune.glow = quantized
         let hubOnly: Bool = (mi == currentMetal && quantized == currentGlow)
         var cache: [MatKind: PhysicallyBasedMaterial] = [:]
         for (e, k) in partEntities {
+            if discUnchanged { break }   // only the Tri-wing's plate or boss metal changed
             if hubOnly, !Self.isFinishDependent(k) { continue }   // only the hub's marks change with the finish
             if cache[k] == nil { cache[k] = makeMaterial(k, metal: m, tex: tex, tune: tune) }
             e.model?.materials = [cache[k]!]
@@ -282,8 +301,38 @@ final class RealitySpinnerRenderer {
             }
         }
         if quantized != currentGlow { rebuildArcMaterials() }
-        currentMetal = mi; currentMark = finish; currentGlow = quantized
+        tw?.applyMaterials(body: m, plate: rkMetals[Self.metalNames[pi]]!, boss: rkMetals[Self.metalNames[bi]]!,
+                           glowValue: quantized, tex: tex, tune: tune)
+        currentMetal = mi; currentMark = finish; currentGlow = quantized; currentPlate = pi; currentBoss = bi
     }
+
+    /// Tri-wing light level (beat pulse), quantised to 1/32. Shows the edge-light materials of that level from a cache that
+    /// `RKTriWing.warmLight` fills a little per frame (see `RKTriWing.applyLight`); nothing is built on the frame of a change.
+    /// Returns the level that is actually showing (the nearest ready level while the exact one is still being built).
+    @discardableResult
+    func applyLight(_ level: Float) -> Float {
+        let clamped: Float = min(max(level.isNaN ? 1 : level, 0), 1)
+        let q: Float = (clamped * 32).rounded() / 32
+        if let tw, currentMetal >= 0, let m = rkMetals[Self.metalNames[currentMetal]] {
+            tw.exactLight = exactLight
+            let applied: Float = tw.applyLight(q, metal: m, tex: tex, tune: tune)
+            tune.light = applied
+            tw.warmLight(budgetMs: Self.lightWarmBudgetMs, metal: m, tex: tex, tune: tune)
+            lastLightTouched = tw.lastLightTouched
+            return applied
+        }
+        tune.light = q
+        return q
+    }
+    var lastLightTouched: Int = 0
+    var lightStatsText: String {
+        guard let tw else { return "no tri-wing" }
+        return "light entities touched by last level change \(tw.lastLightTouched), by last colour change \(tw.lastTintTouched), light materials built \(tw.lightMaterialsBuilt)"
+    }
+    /// Per-frame time budget for filling the light-material cache.
+    static let lightWarmBudgetMs: Double = 2.0
+    /// Probe stills: build the exact light level at once (default off in the app).
+    var exactLight: Bool = false
 
     /// Hub parts whose material depends on the finish (the plain face and the cut / raised mark meshes).
     static func isFinishDependent(_ k: MatKind) -> Bool {
@@ -350,8 +399,14 @@ final class RealitySpinnerRenderer {
             tilt.orientation = yawQuat * pitchQuat
             curPitch = pitchRad
             curYaw = yawRad
+            tw?.setTilt(pitch: pitchRad, yaw: yawRad)
         }
-        if spinRad != curSpin { spin.orientation = simd_quatf(angle: spinRad, axis: V3(0, 0, 1)); curSpin = spinRad }
+        if spinRad != curSpin {
+            let q = simd_quatf(angle: spinRad, axis: V3(0, 0, 1))
+            spin.orientation = q
+            tw?.spin.orientation = q
+            curSpin = spinRad
+        }
         // Self-levelling hubs: each dome turns about the puck's own axis so its mark's up stays toward screen-up.
         if hubRoll != curRoll {
             let rollQuat = simd_quatf(angle: hubRoll, axis: V3(0, 0, 1))
@@ -359,6 +414,14 @@ final class RealitySpinnerRenderer {
             curRoll = hubRoll
         }
         applyBlur(omega: omega * blurScale)
+        applyTriWingBlur(omega: omega * blurScale)
+    }
+
+    /// Same ramp as the disc: the solid Tri-wing fades into its smeared overlay between `blurLo` and `blurHi`.
+    func applyTriWingBlur(omega: Float) {
+        let v: Float = abs(omega)
+        let t: Float = (ssf(blurLo, blurHi, v) * 32).rounded() / 32
+        tw?.setBlur(t)
     }
 
     /// Key light and environment intensity follow the room-light multiplier (non-emissive lighting only).
@@ -405,10 +468,19 @@ final class RealitySpinnerRenderer {
         }
     }
 
+    /// Shows the disc or the Tri-wing (the Tri-wing exists only here; without it the disc stays).
+    func applyModel(_ model: Int, edgeLights: Bool) {
+        let tri: Bool = (model == 1) && tw != nil
+        spin.isEnabled = !tri
+        hub.isEnabled = !tri
+        tw?.setVisible(tri, edgeLights: edgeLights)
+    }
+
     func configure(_ p: RKPass) {
         if curPass == p { return }
         curPass = p
         tilt.isEnabled = (p == .puckOnly || p == .puckGround)
+        tw?.setShadowPass(p == .puckGround)
         ground.isEnabled = (p != .puckOnly)
         // The key lights the puck; the shadow light lights the ground passes. Neither is on in groundNoKey.
         key.isEnabled = (p == .puckOnly)
@@ -540,7 +612,9 @@ final class RealitySpinnerRenderer {
         let worldSide: Float = regionPx / pxPerR
         do {
             ensureSize(side: targetSide, transparent: tr)
-            applyMaterials(metal: p.metal, finish: p.hubFinish, glow: p.glow)
+            applyMaterials(metal: p.metal, finish: p.hubFinish, glow: p.glow, plate: p.plateMetal, boss: p.bossMetal)
+            tw?.setLightColours(p.lightColors)
+            let lightQ: Float = applyLight(p.lightLevel)
             setRoomLight(p.roomLight)
             setShadowDistance(distanceQ)
             shadowOpacity = min(max(p.shadowDarkness, 0), 0.85)
@@ -550,8 +624,8 @@ final class RealitySpinnerRenderer {
             // A resting spinner (same orientation, material, finish, size, framing) reuses the previous output and shadow:
             // no RealityKit render, no shadow passes, and no wait on any RealityKit work. The region's position is not part
             // of the key: moving the puck only changes the copy rectangle.
-            let poseKey = "\(targetSide)w\(worldSide)p\(p.pitchRad)y\(p.yawRad)s\(p.spinRad)o\(p.omega)m\(p.metal)f\(p.hubFinish)"
-                + "r\(p.hubRoll)g\(currentGlow)l\(p.roomLight)b\(p.spinBlur)d\(distanceQ)e\(spreadQ)"
+            let poseKey = "\(targetSide)w\(worldSide)p\(p.pitchRad)y\(p.yawRad)s\(p.spinRad)o\(p.omega)m\(p.metal)f\(p.hubFinish)pm\(p.plateMetal)bm\(p.bossMetal)"
+                + "r\(p.hubRoll)g\(currentGlow)l\(p.roomLight)b\(p.spinBlur)d\(distanceQ)e\(spreadQ)n\(p.model)i\(p.edgeLights)h\(lightQ)c\(tw?.colourKey ?? "")"
             let reuse = poseKey == lastPoseKey && lastSlot >= 0 && hasCoverage
             if reuse {
                 slotRead[lastSlot] = frameNo
@@ -568,6 +642,7 @@ final class RealitySpinnerRenderer {
                     staticKey = key
                 }
                 configure(.puckOnly)
+                applyModel(p.model, edgeLights: p.edgeLights)
                 setPose(pitchRad: p.pitchRad, yawRad: p.yawRad, spinRad: p.spinRad, omega: p.omega,
                         hubRoll: p.hubRoll, blurScale: p.spinBlur)
                 last = try render(into: ring[slot].puck, waitConsumed: wait)
@@ -587,8 +662,11 @@ final class RealitySpinnerRenderer {
                         enc.setFragmentTexture(b0, index: 2); enc.setFragmentTexture(ring[slot].puck, index: 3)
                         enc.setFragmentSamplerState(sampler, index: 0)
                         // Shadow offset in half-resolution pixels: 0.06 R right, 0.09 R down.
-                        var cu = SIMD2<Float>(0.06 * rHalf * distanceQ, 0.09 * rHalf * distanceQ)
-                        enc.setFragmentBytes(&cu, length: MemoryLayout<SIMD2<Float>>.stride, index: 0)
+                        // The silhouette threshold is the disc's 0.002; for the Tri-wing it is 0.30 so its clear crystal (alpha
+                        // below that) is not a silhouette: the open bearing gap lets light through instead of casting a disc.
+                        let silThreshold: Float = (p.model == 1 && tw != nil) ? 0.30 : 0.002
+                        var cu = SIMD4<Float>(0.06 * rHalf * distanceQ, 0.09 * rHalf * distanceQ, silThreshold, 0)
+                        enc.setFragmentBytes(&cu, length: MemoryLayout<SIMD4<Float>>.stride, index: 0)
                         enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
                         enc.endEncoding()
                     }

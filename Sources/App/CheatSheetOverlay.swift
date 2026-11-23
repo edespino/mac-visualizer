@@ -22,8 +22,8 @@ import MacVisualizerCore
 /// track overlay.
 struct CheatSheetOverlay: View {
     let mouseModifier: MouseControlModifier
-    /// True while the Spinner style is active; adds the Spinner key group.
-    var showsSpinnerKeys: Bool = false
+    /// The active style while it is a spinner style (nil otherwise); adds the Spinner key group for that style.
+    var spinnerStyle: VisualizerStyle? = nil
     /// The Spinner's current rotation step (Settings > Spinner > Motion), shown beside the pitch / yaw keys.
     var spinnerStepDegrees: Int = 15
 
@@ -48,20 +48,26 @@ struct CheatSheetOverlay: View {
     ]
 
     private var spinnerKeys: [(String, String)] {
-        [
-            ("m", "Metal"),
-            ("t / Shift+t", "Pitch forward / back (\(spinnerStepDegrees) degree steps, hold to repeat)"),
-            ("y / Shift+y", "Yaw right / left (hold to repeat)"),
-            ("Option+t / Option+Shift+t", "Yaw right / left (same as y / Shift+y, hold to repeat)"),
-            ("0", "Reset orientation; pressed again at face-on, flip to the other side"),
-            ("Option+0", "Same, flipping about the vertical axis (RealityKit; the classic shader ignores yaw)"),
-            ("Option+drag", "Rotate the disc freely (yaw / pitch)"),
-            ("b", "Music mode"),
-            ("c", "Hub finish: lit, raised, engraved"),
-            ("u", "Hum on / off (the hum is only heard when no music is playing)"),
-            ("g", "Classic shader renderer / RealityKit"),
-            ("Scroll", "Spin the disc"),
-        ]
+        let triWing: Bool = spinnerStyle == .triWingSpinner
+        var list: [(String, String)] = [("m", triWing ? "Metal (body)" : "Metal (body and hub)")]
+        if triWing { list.append(("Shift+m", "Plate metal: same as body, then each metal")) }
+        list.append(("t / Shift+t", "Pitch forward / back (\(spinnerStepDegrees) degree steps, hold to repeat)"))
+        list.append(("y / Shift+y", "Yaw right / left (hold to repeat)"))
+        list.append(("Option+t / Option+Shift+t", "Yaw right / left (same as y / Shift+y, hold to repeat)"))
+        list.append(("0", "Reset orientation; pressed again at face-on, flip to the other side"))
+        let yawNote: String = triWing ? "" : " (RealityKit; the classic shader ignores yaw)"
+        list.append(("Option+0", "Same, flipping about the vertical axis" + yawNote))
+        list.append(("Option+drag", "Rotate the spinner freely (yaw / pitch)"))
+        list.append(("b", "Music mode"))
+        if triWing {
+            list.append(("e", "Edge lights on / off"))
+        } else {
+            list.append(("c", "Hub finish: lit, raised, engraved"))
+        }
+        list.append(("u", "Hum on / off (the hum is only heard when no music is playing)"))
+        if !triWing { list.append(("g", "Classic shader renderer / RealityKit")) }
+        list.append(("Scroll", "Spin the spinner"))
+        return list
     }
 
     var body: some View {
@@ -73,9 +79,9 @@ struct CheatSheetOverlay: View {
                     Text(k.1)
                 }
             }
-            if showsSpinnerKeys {
+            if spinnerStyle != nil {
                 Divider().padding(.vertical, 2)
-                Text("Spinner").font(.headline)
+                Text(spinnerStyle?.displayName ?? "Spinner").font(.headline)
                 ForEach(spinnerKeys, id: \.0) { k in
                     HStack(spacing: 12) {
                         Text(k.0).font(.system(.body, design: .monospaced)).frame(width: 190, alignment: .leading)

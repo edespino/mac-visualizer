@@ -70,10 +70,11 @@ private let escapeKeyCode: UInt16 = 53
 /// so they are not part of this pure mapping): `m` metal, `t` / Shift+`t` pitch
 /// forward / back, `y` / Shift+`y` yaw right / left (both by the Spinner's rotation-step setting), `0` reset
 /// orientation (Option+left-drag, a mouse gesture, rotates the disc freely and is handled in `InputController`),
-/// `b` music mode, `c` hub finish, `u` hum on/off, `g` classic shader / RealityKit renderer; the scroll wheel spins
-/// the disc. `m`, `c`, `b`, `u` and `g` write the Spinner's persisted settings (`StyleProfile.spinner`) through
+/// `b` music mode, `u` hum on/off; Disc Spinner only: `c` hub finish, `g` classic shader / RealityKit renderer;
+/// Tri-wing Spinner only: `e` edge lights on/off, Shift+`m` plate metal; the scroll wheel spins
+/// the body. `m`, `c`, `b`, `u`, `g` and `e` write the Spinner's persisted settings (`StyleProfile.spinner`) through
 /// `RenderModel`, exactly like the Settings controls; orientation is runtime state and is not saved. They act only
-/// while the Spinner is active.
+/// while a spinner style is active.
 ///
 /// Maps a key-down to an action, or nil when the key is not bound. Bare keys only:
 /// Command, Control or Option held disables every binding (Shift is allowed, since
@@ -191,6 +192,7 @@ public func spinnerWindowLocked(spinnerActive: Bool, modifiers: ModifierState, d
 public enum SpinnerKeyAction: Equatable {
     case pitchForward, pitchBack, yawRight, yawLeft
     case cycleMetal, resetOrFlip, resetOrFlipYaw, cycleMusicMode, cycleHubFinish, toggleHum, cycleRenderer
+    case toggleEdgeLights, cyclePlateMetal
 
     /// True for the four rotation keys, the only Spinner keys that honour key repeat.
     public var repeats: Bool {
@@ -201,14 +203,17 @@ public enum SpinnerKeyAction: Equatable {
     }
 }
 
-/// Maps a key-down to a Spinner key action (the caller applies it only while the Spinner is active), or nil.
-/// `charactersIgnoringModifiers` is used (not `characters`) because Option changes the produced character (Option+t
-/// gives a dagger). Rules: bare `t` / `y` = pitch forward / yaw right; Shift+`t` / Shift+`y` = pitch back / yaw left;
-/// Option+`0` = reset or flip about the vertical axis (exactly Option; Option types a symbol, hence the unmodified key);
-/// Option+`t` = yaw right and Option+Shift+`t` = yaw left (the one Option exception; Command and Control never match).
-/// The other keys need no modifier at all. Repeats are returned only for rotation keys.
+/// Maps a key-down to a Spinner key action for the active spinner style (`style`; nil for any other style). Used only
+/// while a spinner style is active. `charactersIgnoringModifiers` is used (not `characters`) because Option changes
+/// the produced character (Option+t gives a dagger). Rules: bare `t` / `y` = pitch forward / yaw right; Shift+`t` /
+/// Shift+`y` = pitch back / yaw left; Option+`0` = reset or flip about the vertical axis (exactly Option; Option types
+/// a symbol, hence the unmodified key); Option+`t` = yaw right and Option+Shift+`t` = yaw left (the one Option
+/// exception; Command and Control never match). Style-specific keys: `c` (hub finish) and `g` (renderer) exist only on
+/// the Disc Spinner; `e` (edge lights) and Shift+`m` (plate metal) only on the Tri-wing Spinner. The other keys need no
+/// modifier at all. Repeats are returned only for rotation keys.
 public func spinnerKeyAction(charactersIgnoringModifiers: String, modifiers: ModifierState,
-                             isRepeat: Bool) -> SpinnerKeyAction? {
+                             isRepeat: Bool, style: VisualizerStyle) -> SpinnerKeyAction? {
+    guard let model = style.spinnerModel else { return nil }
     if modifiers.command || modifiers.control { return nil }
     let key: String = charactersIgnoringModifiers.lowercased()
     var action: SpinnerKeyAction? = nil
@@ -218,6 +223,7 @@ public func spinnerKeyAction(charactersIgnoringModifiers: String, modifiers: Mod
     } else if modifiers.shift {
         if key == "t" { action = .pitchBack }
         if key == "y" { action = .yawLeft }
+        if key == "m" && model == .triWing { action = .cyclePlateMetal }
     } else {
         switch key {
         case "t": action = .pitchForward
@@ -225,9 +231,10 @@ public func spinnerKeyAction(charactersIgnoringModifiers: String, modifiers: Mod
         case "m": action = .cycleMetal
         case "0": action = .resetOrFlip
         case "b": action = .cycleMusicMode
-        case "c": action = .cycleHubFinish
         case "u": action = .toggleHum
-        case "g": action = .cycleRenderer
+        case "c": if model == .disc { action = .cycleHubFinish }
+        case "g": if model == .disc { action = .cycleRenderer }
+        case "e": if model == .triWing { action = .toggleEdgeLights }
         default: break
         }
     }

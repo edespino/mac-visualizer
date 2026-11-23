@@ -2175,7 +2175,7 @@ fragment float4 spinner_fs(FSQOut in [[stage_in]],
 // Under the puck the measurement is meaningless; the ground there is in the puck's own shadow, so the coverage is the
 // puck silhouette translated by `off` (half-resolution pixels, toward lower right), the same offset a flat disc casts.
 // Output (coverage, 1); blurred afterwards and read by rk_copy_fs.
-struct RKCovUniforms { float2 off; };
+struct RKCovUniforms { float2 off; float alphaThreshold; };
 fragment float4 rk_shadow_cov_fs(FSQOut in [[stage_in]],
                                  constant RKCovUniforms &cu [[buffer(0)]],
                                  texture2d<float> A  [[texture(0)]],
@@ -2195,7 +2195,7 @@ fragment float4 rk_shadow_cov_fs(FSQOut in [[stage_in]],
             if (q.x < 0 || q.y < 0 || q.x >= hs.x || q.y >= hs.y) continue;
             for (int s = 0; s < 4; ++s) {
                 int2 fp = q * 2 + int2(s & 1, s >> 1);
-                if (fp.x < fs.x && fp.y < fs.y && P.read(uint2(fp)).a > 0.002) { covered = 1.0; break; }
+                if (fp.x < fs.x && fp.y < fs.y && P.read(uint2(fp)).a > cu.alphaThreshold) { covered = 1.0; break; }
             }
         }
     }
@@ -2211,7 +2211,7 @@ fragment float4 rk_shadow_cov_fs(FSQOut in [[stage_in]],
             if (q.x < 0 || q.y < 0 || q.x >= hs.x || q.y >= hs.y) continue;
             for (int s = 0; s < 4; ++s) {
                 int2 fp = q * 2 + int2(s & 1, s >> 1);
-                if (fp.x < fs.x && fp.y < fs.y && P.read(uint2(fp)).a > 0.002) { sil = 1.0; break; }
+                if (fp.x < fs.x && fp.y < fs.y && P.read(uint2(fp)).a > cu.alphaThreshold) { sil = 1.0; break; }
             }
         }
     }

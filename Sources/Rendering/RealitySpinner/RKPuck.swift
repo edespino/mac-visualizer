@@ -128,6 +128,7 @@ struct RKTuning {
     var glass = true
     var hubFinish = 0        // SpinnerHubFinish index: 0 lit, 1 raised, 2 engraved
     var glow: Float = 1      // multiplier on every emissive intensity (SpinnerSettings.glowBrightness)
+    var light: Float = 1     // Tri-wing light level 0...1 (SpinnerLightPulse), a further multiplier on the edge lights' emissive
 }
 
 /// Pale top-face tint of the raised hub mark: the body metal lightened and slightly desaturated

@@ -140,7 +140,7 @@ final class InputController {
         let f: NSEvent.ModifierFlags = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let held: ModifierState = ModifierState(shift: f.contains(.shift), option: f.contains(.option),
                                                 command: f.contains(.command), control: f.contains(.control))
-        let spinner: Bool = model.settings.visualizerStyle == .spinner
+        let spinner: Bool = model.settings.visualizerStyle.isSpinnerFamily
         let lock: Bool = spinnerWindowLocked(spinnerActive: spinner, modifiers: held,
                                              dragInProgress: spinnerDrag != nil)
         applyWindowLock(lock)
@@ -242,9 +242,10 @@ final class InputController {
         // type normally; the bare keys apply once focus leaves the field).
         if event.window?.firstResponder is NSText { return event }
         // Spinner keys (decided by the pure `spinnerKeyAction`): rotation keys repeat while held, the rest act once.
-        if model.settings.visualizerStyle == .spinner,
+        if model.settings.visualizerStyle.isSpinnerFamily,
            let spin = spinnerKeyAction(charactersIgnoringModifiers: event.charactersIgnoringModifiers ?? "",
-                                       modifiers: modifiers(of: event), isRepeat: event.isARepeat) {
+                                       modifiers: modifiers(of: event), isRepeat: event.isARepeat,
+                                       style: model.settings.visualizerStyle) {
             performSpinnerKey(spin)
             return nil
         }
@@ -263,12 +264,14 @@ final class InputController {
         case .yawRight: SpinnerInput.shared.pendingOrientation.yawSteps += 1
         case .yawLeft: SpinnerInput.shared.pendingOrientation.yawSteps -= 1
         case .cycleMetal: model.cycleSpinnerMetal()
+        case .cyclePlateMetal: model.cycleSpinnerPlateMetal()
         case .resetOrFlip: model.resetOrFlipSpinnerOrientation()
         case .resetOrFlipYaw: model.resetOrFlipSpinnerYaw()
         case .cycleMusicMode: model.cycleSpinnerMusicMode()
         case .cycleHubFinish: model.cycleSpinnerHubFinish()
         case .toggleHum: model.toggleSpinnerHum()
         case .cycleRenderer: model.cycleSpinnerRenderer()
+        case .toggleEdgeLights: model.toggleSpinnerEdgeLights()
         }
     }
 
@@ -278,7 +281,7 @@ final class InputController {
         // the window nor reaches anything else. When the app-wide modifier is also Option, its left-click binding
         // (previous visualization) is held back and fires on release only if the press never became a drag, so the
         // click keeps working and a drag past the movement threshold always rotates.
-        if event.type == .leftMouseDown, model.settings.visualizerStyle == .spinner,
+        if event.type == .leftMouseDown, model.settings.visualizerStyle.isSpinnerFamily,
            modifiers(of: event) == ModifierState(option: true), !isOverWindowButton(event, in: window) {
             spinnerDrag = SpinnerDragGesture()
             deferredClick = nil
@@ -341,7 +344,7 @@ final class InputController {
     private func handleScroll(_ event: NSEvent) -> NSEvent? {
         guard isMainWindow(event) else { return event }
         // Bare wheel spins the Spinner visualization; never consumed.
-        if model.settings.visualizerStyle == .spinner, modifiers(of: event).isEmpty {
+        if model.settings.visualizerStyle.isSpinnerFamily, modifiers(of: event).isEmpty {
             let d = Double(event.scrollingDeltaY) / (event.hasPreciseScrollingDeltas ? 10 : 1)
             SpinnerInput.shared.pendingImpulse += d
             return event

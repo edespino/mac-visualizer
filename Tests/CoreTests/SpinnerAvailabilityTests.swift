@@ -27,7 +27,7 @@ final class SpinnerAvailabilityTests: XCTestCase {
         VisualizerStyle.spinnerOSCheck = { false }
         XCTAssertFalse(VisualizerStyle.spinner.isAvailable)
         XCTAssertTrue(VisualizerStyle.bars.isAvailable)
-        XCTAssertEqual(VisualizerStyle.availableCases.count, VisualizerStyle.allCases.count - 1)
+        XCTAssertEqual(VisualizerStyle.availableCases.count, VisualizerStyle.allCases.count - 2)
         VisualizerStyle.spinnerOSCheck = { true }
         XCTAssertTrue(VisualizerStyle.spinner.isAvailable)
         XCTAssertEqual(VisualizerStyle.availableCases, VisualizerStyle.allCases)
@@ -37,11 +37,13 @@ final class SpinnerAvailabilityTests: XCTestCase {
         VisualizerStyle.spinnerOSCheck = { false }
         let s = VisualizerSettings.defaults
         XCTAssertFalse(s.enabledStyles.contains(.spinner))
-        XCTAssertEqual(s.enabledStyles.count, VisualizerStyle.allCases.count - 1)
+        XCTAssertFalse(s.enabledStyles.contains(.triWingSpinner))
+        XCTAssertEqual(s.enabledStyles.count, VisualizerStyle.allCases.count - 2)
         var cur = VisualizerStyle.bars
         var seen: [VisualizerStyle] = []
         for _ in 0..<s.enabledStyles.count { cur = s.nextEnabledStyle(after: cur); seen.append(cur) }
         XCTAssertFalse(seen.contains(.spinner))
+        XCTAssertFalse(seen.contains(.triWingSpinner))
         XCTAssertEqual(Set(seen).count, s.enabledStyles.count)
         // wrap: the style before spinner's neighbour
         XCTAssertEqual(s.nextEnabledStyle(after: .musicalSpectrum), .bars)
@@ -58,7 +60,8 @@ final class SpinnerAvailabilityTests: XCTestCase {
         let s = VisualizerSettings.defaults
         for seed in 0..<500 {
             var rng = SplitMix(seed: UInt64(seed))
-            XCTAssertNotEqual(s.randomEnabledStyle(excluding: .bars, using: &rng), .spinner)
+            let pick = s.randomEnabledStyle(excluding: .bars, using: &rng)
+            XCTAssertFalse(pick.isSpinnerFamily)
         }
     }
 
@@ -94,7 +97,9 @@ final class SpinnerAvailabilityTests: XCTestCase {
         let s = VisualizerSettings.defaults
         XCTAssertEqual(s.enabledStyles, VisualizerStyle.allCases)
         XCTAssertEqual(s.nextEnabledStyle(after: .musicalSpectrum), .spinner)
-        XCTAssertEqual(VisualizerStyle.spinner.next, .bars)
+        XCTAssertEqual(VisualizerStyle.spinner.next, .triWingSpinner)
+        XCTAssertEqual(VisualizerStyle.triWingSpinner.next, .bars)
+        XCTAssertTrue(VisualizerStyle.triWingSpinner.isAvailable)
     }
 }
 

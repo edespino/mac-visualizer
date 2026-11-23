@@ -212,7 +212,7 @@ final class StyleEnableToggleTests: XCTestCase {
     func testNextEnabledStyleMatchesPlainNextWhenAllEnabled() {
         let s = VisualizerSettings.defaults
         XCTAssertEqual(s.nextEnabledStyle(after: .bars), .radial)
-        XCTAssertEqual(s.nextEnabledStyle(after: .spinner), .bars)
+        XCTAssertEqual(s.nextEnabledStyle(after: .triWingSpinner), .bars)
     }
 
     func testNextEnabledStyleSkipsDisabled() {
@@ -225,7 +225,7 @@ final class StyleEnableToggleTests: XCTestCase {
     func testNextEnabledStyleWrapsAroundSkippingDisabled() {
         var s = VisualizerSettings.defaults
         s.setStyleEnabled(.bars, false)
-        XCTAssertEqual(s.nextEnabledStyle(after: .spinner), .radial)
+        XCTAssertEqual(s.nextEnabledStyle(after: .triWingSpinner), .radial)
     }
 
     func testPreviousEnabledStyleSkipsDisabled() {
@@ -236,6 +236,7 @@ final class StyleEnableToggleTests: XCTestCase {
 
     func testPreviousEnabledStyleWrapsAroundSkippingDisabled() {
         var s = VisualizerSettings.defaults
+        s.setStyleEnabled(.triWingSpinner, false)
         s.setStyleEnabled(.spinner, false)
         XCTAssertEqual(s.previousEnabledStyle(before: .bars), .musicalSpectrum)
     }

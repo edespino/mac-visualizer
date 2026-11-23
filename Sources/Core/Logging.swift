@@ -41,6 +41,9 @@ public enum Log {
     /// Lyrics fetch/translate/cache diagnostics. Never log lyric text or the API key.
     public static let lyrics = Logger(subsystem: subsystem, category: "lyrics")
 
+    /// RealityKit Spinner setup/render diagnostics (a failure makes the Tri-wing Spinner fall back to the disc shader).
+    public static let spinnerRender = Logger(subsystem: subsystem, category: "spinner-render")
+
     /// Bearing hum audio engine diagnostics.
     public static let spinnerHum = Logger(subsystem: subsystem, category: "spinner-hum")
 }

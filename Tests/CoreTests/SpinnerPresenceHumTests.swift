@@ -292,30 +292,30 @@ final class SpinnerHumSynthTests: XCTestCase {
         _ = renderSeconds(5, speed: 5, synth: s)
         let before = windowRMS(renderSeconds(0.5, speed: 5, synth: s), window: 480).reduce(0, +) / 25
         let stepped = renderSeconds(3, speed: 20, synth: s)
-        let rms = windowRMS(stepped, window: 1920)      // 40 ms windows
-        let after = rms.suffix(6).reduce(0, +) / 6
+        let rms = windowRMS(stepped, window: 480)       // 10 ms windows
+        let after = rms.suffix(24).reduce(0, +) / 24
         let threshold = before + 0.632 * (after - before)
         let idx = rms.firstIndex { $0 >= threshold }!
-        let t63 = Double(idx) * 0.04 + 0.02
+        let t63 = Double(idx) * 0.01 + 0.005
         print("HUM speed step 5->20: before=\(before) after=\(after) t63=\(t63)s")
-        XCTAssertGreaterThan(t63, 0.2)
-        XCTAssertLessThan(t63, 0.45)
+        XCTAssertGreaterThan(t63, SpinnerTuning.humAttackSeconds * 0.4)
+        XCTAssertLessThan(t63, SpinnerTuning.humAttackSeconds * 2.5)
         XCTAssertTrue(stepped.allSatisfy { $0.isFinite })
         _ = renderSeconds(2, speed: 20, synth: s)
         let steady = renderSeconds(0.5, speed: 20, synth: s)
         XCTAssertLessThanOrEqual(jump(stepped), jump(steady) * 1.25)
     }
 
-    /// Time (s) for the synth's gain to cover 63.2% of a step between two speeds, read 10 ms at a time.
+    /// Time (s) for the synth's gain to cover 63.2% of a step between two speeds, read 2 ms at a time.
     private func gainT63(from: Float, to: Float) -> Double {
         let s = SpinnerHumSynth(sampleRate: sr)
         _ = renderSeconds(6, speed: from, synth: s)
         let g0 = s.currentGain
         let g1 = Float(SpinnerHum.gain(speed: Double(to)))
-        for i in 0..<400 {
-            _ = renderSeconds(0.01, speed: to, synth: s)
+        for i in 0..<2000 {
+            _ = renderSeconds(0.002, speed: to, synth: s)
             let frac = (s.currentGain - g0) / (g1 - g0)
-            if frac >= 0.632 { return Double(i + 1) * 0.01 }
+            if frac >= 0.632 { return Double(i + 1) * 0.002 }
         }
         return .infinity
     }
@@ -324,8 +324,19 @@ final class SpinnerHumSynthTests: XCTestCase {
         let attack = gainT63(from: 5, to: 20)
         let release = gainT63(from: 20, to: 5)
         print("HUM gain t63 attack=\(attack)s release=\(release)s")
-        XCTAssertEqual(attack, SpinnerTuning.humAttackSeconds, accuracy: 0.03)
-        XCTAssertEqual(release, SpinnerTuning.humReleaseSeconds, accuracy: 0.03)
+        XCTAssertEqual(attack, SpinnerTuning.humAttackSeconds, accuracy: 0.01)
+        XCTAssertEqual(release, SpinnerTuning.humReleaseSeconds, accuracy: 0.01)
+    }
+
+    func testBrakedDiscHumDiesQuickly() {
+        let s = SpinnerHumSynth(sampleRate: sr)
+        _ = renderSeconds(5, speed: 60, synth: s)
+        let settled = s.currentGain
+        let out = renderSeconds(0.25, speed: 0, synth: s)
+        print("HUM brake: settled=\(settled) after0.25s=\(s.currentGain)")
+        XCTAssertGreaterThan(settled, 0)
+        XCTAssertTrue(out.allSatisfy { $0.isFinite })
+        XCTAssertLessThan(s.currentGain, settled * 0.05)
     }
 
     func testZeroSpeedIsSilent() {

@@ -605,7 +605,11 @@ final class MetalRenderer {
             let m = host.updateMix(now: CACurrentMediaTime(), wantRealityKit: want)
             if host.state == .ready && (m > 0 || want) { rkPlan = (host, sv, m) }
         }
-        let skipShader = (rkPlan?.mix ?? 0) >= 0.999
+        // The Tri-wing Spinner exists only in RealityKit: until RealityKit is ready its scene is EMPTY (no shader
+        // stand-in), then it fades in. Only a failed RealityKit setup falls back to drawing the disc shader.
+        let triWingHasNoShader: Bool = settings.visualizerStyle == .triWingSpinner
+            && RealitySpinnerHost.isSupported && RealitySpinnerHost.shared.state != .failed
+        let skipShader = (rkPlan?.mix ?? 0) >= 0.999 || triWingHasNoShader
 
         let pipeline: MTLRenderPipelineState?
         switch kind {
@@ -620,7 +624,8 @@ final class MetalRenderer {
         }
         if skipShader {   // fully RealityKit; the pass only clears
             if let enc = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor) { enc.endEncoding() }
-            encodeRealitySpinner(rkPlan, descriptor: descriptor, commandBuffer: commandBuffer, settings: settings, clearColor: clearColor)
+            encodeRealitySpinner(rkPlan, descriptor: descriptor, commandBuffer: commandBuffer, settings: settings, clearColor: clearColor,
+                             effectivePalette: effectivePalette)
             return
         }
         guard let pipeline,
@@ -674,19 +679,23 @@ final class MetalRenderer {
         }
         enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         enc.endEncoding()
-        encodeRealitySpinner(rkPlan, descriptor: descriptor, commandBuffer: commandBuffer, settings: settings, clearColor: clearColor)
+        encodeRealitySpinner(rkPlan, descriptor: descriptor, commandBuffer: commandBuffer, settings: settings, clearColor: clearColor,
+                             effectivePalette: effectivePalette)
     }
 
     /// Render the RealityKit puck and copy it into the scene texture over/into what the shader pass drew.
     private func encodeRealitySpinner(_ plan: (host: RealitySpinnerHost, sv: SpinnerVisualizer, mix: Float)?,
                                       descriptor: MTLRenderPassDescriptor, commandBuffer: MTLCommandBuffer,
-                                      settings: VisualizerSettings, clearColor: MTLClearColor) {
+                                      settings: VisualizerSettings, clearColor: MTLClearColor, effectivePalette: ColorPalette?) {
         guard let plan, let tex = descriptor.colorAttachments[0].texture else { return }
+        // The Tri-wing's lights follow the palette the rest of the frame uses (the auto-cycle's crossfade included).
+        let palette: ColorPalette? = settings.spinnerSettings.lightColors == .palette
+            ? (effectivePalette ?? ColorPalette.preset(named: settings.paletteName)) : nil
         let bg = SIMD3<Float>(Float(clearColor.red), Float(clearColor.green), Float(clearColor.blue))
         _ = plan.host.encode(spinner: plan.sv, settings: settings.spinnerSettings, width: tex.width, height: tex.height,
                              transparent: settings.windowTransparencyMode != .opaque, background: bg,
                              offsetX: contentOffsetX, offsetY: contentOffsetY, mix: plan.mix,
-                             descriptor: descriptor, commandBuffer: commandBuffer, blur: bloomBlur)
+                             descriptor: descriptor, commandBuffer: commandBuffer, blur: bloomBlur, palette: palette)
     }
 
     // Deterministic xorshift64 RNG — matches SeededRNG in Core exactly.
@@ -740,7 +749,7 @@ final class MetalRenderer {
         var u = MacVisualizerCore.makeCompositeUniforms(intensity: intensity, settings: settings,
                                                         time: shaderTime())
         // The spinner supplies its own coverage in the scene alpha channel.
-        if settings.visualizerStyle == .spinner && u.perPixelAlphaMode > 0.5 { u.perPixelAlphaMode = 2 }
+        if settings.visualizerStyle.isSpinnerFamily && u.perPixelAlphaMode > 0.5 { u.perPixelAlphaMode = 2 }
         return u
     }
 }

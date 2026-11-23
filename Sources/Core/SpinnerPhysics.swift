@@ -125,6 +125,37 @@ public enum SpinnerMusicMode: String, Codable, CaseIterable {
     }
 }
 
+/// Which spinner body is drawn. `disc` is the original machined wheel; `triWing` is the three-wing spinner with
+/// jewelled bosses, a visible ball bearing and an engraved ring. The tri-wing exists only in the RealityKit renderer:
+/// while the classic shader draws (user choice, macOS below 15, or RealityKit still loading) the disc is shown.
+public enum SpinnerModel: String, Codable, CaseIterable {
+    case disc, triWing
+
+    /// Model index passed to the renderers (0 disc, 1 tri-wing).
+    public var index: Int { self == .disc ? 0 : 1 }
+
+    public var displayName: String {
+        switch self {
+        case .disc: return "Disc"
+        case .triWing: return "Tri-wing"
+        }
+    }
+
+    /// The next model, wrapping after the last.
+    public var next: SpinnerModel {
+        let all = SpinnerModel.allCases
+        let i: Int = all.firstIndex(of: self) ?? 0
+        return all[(i + 1) % all.count]
+    }
+
+    /// The previous model, wrapping before the first.
+    public var previous: SpinnerModel {
+        let all = SpinnerModel.allCases
+        let i: Int = all.firstIndex(of: self) ?? 0
+        return all[(i + all.count - 1) % all.count]
+    }
+}
+
 /// Which renderer draws the Spinner. `realityKit` is the default on macOS 15 and later; `shader` is the classic
 /// renderer (bare key g switches). On older systems the shader is used automatically (see `effective(realityKitAvailable:)`).
 /// While RealityKit loads, the shader is drawn and then crossfades to it.
@@ -189,10 +220,10 @@ public enum SpinnerTuning {
     public static let humMaxGain: Double = 0.06
     /// Hum loudness curve: gain = humMaxGain * (speed / maxSpeed)^exponent.
     public static let humGainExponent: Double = 1.8
-    /// Time constant (s) of the hum's gain and pitch when speed rises.
-    public static let humAttackSeconds: Double = 0.30
-    /// Time constant (s) of the hum's gain and pitch when speed falls.
-    public static let humReleaseSeconds: Double = 0.60
+    /// Time constant (s) of the hum's gain and pitch when speed rises (short, so the hum tracks the disc).
+    public static let humAttackSeconds: Double = 0.05
+    /// Time constant (s) of the hum's gain and pitch when speed falls (short, so a braked disc goes quiet at once).
+    public static let humReleaseSeconds: Double = 0.08
     /// Seconds with NO music activity (no track playing, no captured audio, no demo mode) before the hum may be heard.
     public static let humQuietSeconds: Double = 6.0
     /// Seconds the hum takes to fade to silence when music activity begins.

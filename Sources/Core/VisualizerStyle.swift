@@ -20,7 +20,9 @@ public enum VisualizerStyle: String, Codable, CaseIterable {
     case bars, radial, mirrored, oscilloscope, particles, fountain, fireworks
     case ribbonWave = "siri"   // raw value preserved for backward-compat with existing settings.json
     case wireframe, plasma, bumpscope, joyPlot, heightfield, voronoi, lavaLamp, beatCounter, polartone, octaveMeatballs, starNest, outrunRain, xyScope, iris, tricentric, musicalSpectrum
-    case spinner
+    /// The two spinners are separate styles: `.spinner` is the Disc Spinner (raw value kept for old files),
+    /// `.triWingSpinner` is the Tri-wing Spinner (RealityKit only). Appended last.
+    case spinner, triWingSpinner
 
     public var displayName: String {
         switch self {
@@ -48,7 +50,8 @@ public enum VisualizerStyle: String, Codable, CaseIterable {
         case .iris: return "Iris"
         case .tricentric: return "Tricentric"
         case .musicalSpectrum: return "Musical Spectrum"
-        case .spinner: return "Spinner"
+        case .spinner: return "Disc Spinner"
+        case .triWingSpinner: return "Tri-wing Spinner"
         }
     }
 
@@ -58,7 +61,7 @@ public enum VisualizerStyle: String, Codable, CaseIterable {
     public var usesRoundParticles: Bool {
         switch self {
         case .particles, .fountain, .fireworks: return true
-        case .bars, .radial, .mirrored, .oscilloscope, .ribbonWave, .wireframe, .plasma, .bumpscope, .joyPlot, .heightfield, .voronoi, .lavaLamp, .beatCounter, .polartone, .octaveMeatballs, .starNest, .outrunRain, .xyScope, .iris, .tricentric, .musicalSpectrum, .spinner: return false
+        case .bars, .radial, .mirrored, .oscilloscope, .ribbonWave, .wireframe, .plasma, .bumpscope, .joyPlot, .heightfield, .voronoi, .lavaLamp, .beatCounter, .polartone, .octaveMeatballs, .starNest, .outrunRain, .xyScope, .iris, .tricentric, .musicalSpectrum, .spinner, .triWingSpinner: return false
         }
     }
 
@@ -87,7 +90,7 @@ public enum VisualizerStyle: String, Codable, CaseIterable {
              .heightfield, .wireframe,
              .oscilloscope, .ribbonWave, .joyPlot, .mirrored,
              .octaveMeatballs,
-             .spinner:
+             .spinner, .triWingSpinner:
             return true
         default:
             return false
@@ -104,7 +107,7 @@ public enum VisualizerStyle: String, Codable, CaseIterable {
     /// `bands`, so a style that never reads `bands` sees none of them.
     public var usesFrequencyBands: Bool {
         switch self {
-        case .plasma, .fireworks, .beatCounter, .oscilloscope, .polartone, .xyScope, .spinner:
+        case .plasma, .fireworks, .beatCounter, .oscilloscope, .polartone, .xyScope, .spinner, .triWingSpinner:
             return false
         default:
             return true
@@ -118,9 +121,16 @@ public enum VisualizerStyle: String, Codable, CaseIterable {
         usesFrequencyBands && self != .musicalSpectrum
     }
 
-    /// Whether the Color palette control has a visible effect. False for the Spinner, whose colours come from its
+    /// Whether the Color palette control has a visible effect. False for both Spinners, whose colours come from its
     /// metal (the RealityKit renderer ignores the palette; the classic shader uses it only for a faint reflection tint).
-    public var usesPalette: Bool { self != .spinner }
+    public var usesPalette: Bool { !isSpinnerFamily }
+
+    /// Whether the Color palette control is live given the Spinner's settings: `usesPalette`, or the Tri-wing Spinner
+    /// whose lights follow the palette (`SpinnerLightColors.palette`). `usesPalette` itself stays the per-style flag.
+    public func paletteControlEnabled(spinner: SpinnerSettings) -> Bool {
+        if usesPalette { return true }
+        return self == .triWingSpinner && spinner.lightColors == .palette
+    }
 
     /// Whether the style draws peak-hold caps (reads `AudioFrame.bandPeaks`).
     /// Only Bars does, so the Peak-hold-caps toggle is inert everywhere else.
@@ -151,7 +161,7 @@ public enum VisualizerStyle: String, Codable, CaseIterable {
         case .octaveMeatballs: return .octaveMeatballs
         case .starNest: return .starNest
         case .outrunRain: return .outrunRain
-        case .spinner: return .spinner
+        case .spinner, .triWingSpinner: return .spinner
         default: return nil
         }
     }
@@ -182,7 +192,20 @@ public enum VisualizerStyle: String, Codable, CaseIterable {
         case .iris: return IrisVisualizer()
         case .tricentric: return TricentricVisualizer()
         case .musicalSpectrum: return MusicalSpectrumVisualizer()
-        case .spinner: return SpinnerVisualizer()
+        case .spinner, .triWingSpinner: return SpinnerVisualizer(shared: SpinnerSharedState.shared)
+        }
+    }
+
+    /// True for the Disc Spinner and the Tri-wing Spinner: everything that treats "a spinner is active" alike
+    /// (scroll wheel, keys, drag, hum, presence, RealityKit setup) tests this, never `== .spinner`.
+    public var isSpinnerFamily: Bool { self == .spinner || self == .triWingSpinner }
+
+    /// The body a spinner style draws (derived from the style, not from a setting); nil for every other style.
+    public var spinnerModel: SpinnerModel? {
+        switch self {
+        case .spinner: return .disc
+        case .triWingSpinner: return .triWing
+        default: return nil
         }
     }
 
@@ -191,10 +214,10 @@ public enum VisualizerStyle: String, Codable, CaseIterable {
         ProcessInfo.processInfo.isOperatingSystemAtLeast(OperatingSystemVersion(majorVersion: 15, minorVersion: 0, patchVersion: 0))
     }
 
-    /// False only for `.spinner` on an OS older than macOS 15. An unavailable style is treated
+    /// False only for the two Spinners on an OS older than macOS 15. An unavailable style is treated
     /// exactly like a disabled one everywhere (its saved profile is left untouched).
     public var isAvailable: Bool {
-        self == .spinner ? Self.spinnerOSCheck() : true
+        isSpinnerFamily ? Self.spinnerOSCheck() : true
     }
 
     /// The cases that can be chosen or reached on this OS, in case order.

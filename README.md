@@ -8,11 +8,13 @@ A Mac desktop audio visualizer that reacts to the audio of Spotify and Apple Mus
 
 ## Visualizer styles
 
-25 styles across vertex-emit and shader-driven rendering: bars, radial, mirrored, oscilloscope, particles, fountain, fireworks, ribbon wave, wireframe icosphere, plasma, bumpscope, joy plot, heightfield grid, voronoi cells/blobs/softCells, lava lamp shader/marching-squares, beat counter, polartone, octave meatballs, star nest, outrun the rain, XY scope, iris, tricentric, musical spectrum, spinner.
+26 styles across vertex-emit and shader-driven rendering: bars, radial, mirrored, oscilloscope, particles, fountain, fireworks, ribbon wave, wireframe icosphere, plasma, bumpscope, joy plot, heightfield grid, voronoi cells/blobs/softCells, lava lamp shader/marching-squares, beat counter, polartone, octave meatballs, star nest, outrun the rain, XY scope, iris, tricentric, musical spectrum, disc spinner, tri-wing spinner.
 
-**Spinner** (macOS 15 or later; the style is hidden on older systems): a machined-metal two-sided disc you spin with the scroll wheel. It keeps spinning with friction, stays visible while in use, and makes a soft bearing hum **that is only heard when no music is playing**. It is drawn by RealityKit, with the classic shader renderer shown for a moment while RealityKit loads (loading starts when the Spinner becomes the active style, including at launch; setup takes about 3 seconds in a Debug build). Every choice below is a saved setting (Settings, with the Spinner active: Controls, then the Motion, Look, Shadow, Sound & Music and Renderer sections); each has a reset arrow and an undo step, and the keys write the same settings. Only the orientation (pitch and yaw), spin angle and speed are not saved.
+**Spinners** (macOS 15 or later; both styles are hidden on older systems): two separate visualizations, the **Disc Spinner** and the **Tri-wing Spinner**, each in the normal rotation (`h` / `l`, random, the Enabled toggle, the right-click menu and the Settings style list treat them separately). Each has its own saved settings. They share one spin: the angle, speed, orientation and direction lock carry over when you switch between them, so a spinning disc becomes a spinning Tri-wing at the same speed and pose. The Disc Spinner is a machined-metal two-sided disc you spin with the scroll wheel. It keeps spinning with friction, stays visible while in use, and makes a soft bearing hum **that is only heard when no music is playing**. The Disc Spinner is drawn by RealityKit, with the classic shader renderer shown for a moment while RealityKit loads (loading starts when either Spinner becomes the active style, including at launch; setup takes about 3 seconds in a Debug build). Every choice below is a saved setting (Settings, with a Spinner active: Controls, then the Motion, Look, Shadow, Sound & Music and Renderer sections; the Tri-wing Spinner has an Orientation section instead of Renderer); each has a reset arrow and an undo step, and the keys write the same settings. Only the orientation (pitch and yaw), spin angle and speed are not saved.
 
-Keys, while it is active (`?` lists them):
+**Tri-wing Spinner.** Next to the Disc Spinner is the **Tri-wing Spinner**, a three-wing spinner of machined, watch-movement-inspired parts. The Tri-wing has a satin plate with a polished chamfer, a stepped ray-finished pad and round boss on each wing, a shock-spring jewel setting on every boss (a countersink, a gold block with notches, a polished domed blue cap jewel in a gold bezel and a flat polished gold spring clip), three recessed heat-blued domed screws per pad, an open ball bearing you can see through (bright races with curved raceways that the twelve mirror steel balls sit in, and a satin steel cage of bevelled bars with machined ball pockets, with real see-through gaps between them) under an anti-reflective coated crystal on both faces (a thin blue sheen at an angle, and a faint window reflection near one pose), a plain turned hub, a bright raised ring with a different engraving on each face (fine engraved-roman letters set as arcs, with polished bright floors: `KEEP YOUR OWN TIME` on the front with `No 001` on a plain panel between two fluted zones below it, `THE VISUALIZER CO.` over `ADJUSTED TO THE BEAT` on the back), with a square-ended spanner slot (a wide polished chamfer, a flat milled floor, cut through the ring and into the body) at both 3 and 9 o'clock, and a machined side wall (a polished edge chamfer on both faces, a recessed waist band with polished shoulders and a fine turned floor, fine vertical grip flutes round each wing tip, and a slim smoked-glass window beside each edge-light tube that glows in the tube's colour and goes dark with Edge lights off), and two glowing edge-light glass tubes along the flanks of every wing, as bright as the disc's rods (a colour per wing, in deep machined slots that glow in the wing's colour, with a bright line on the slot lip and polished end collars; neutral clear glass and dark slots when Edge lights is off). A gold patch on one wing carries the sign-off mark on the front face and the interlocked double-E mark on the back face. All of it is real geometry on both faces, with the lettering and marks reading correctly on whichever face is toward you. **The Tri-wing Spinner exists only in the RealityKit renderer**: it has no Renderer setting and no `g` key; while RealityKit loads its scene is empty and then fades in (it never shows the disc shader as a stand-in; only if RealityKit setup fails is the disc shader drawn so the window is not blank). Metal applies to the body and hub (and to the plates and bosses while Plate metal and Boss metal follow it); the gold parts, blue jewels and screws, the steel bearing and the bright ring keep their own materials. The Hub finish setting does not apply to the Tri-wing Spinner (its hub is plain). Everything else (spin physics, direction lock, music drive, hum, tilt, flip, Option-drag, shadow, size, room light, spin blur) works the same. At speed the solid Tri-wing crossfades into the time-average of its own geometry (the angular average of the part at each radius): a bright lit-metal centre with a turned-metal highlight, a smooth translucent wing zone that fades toward the tip, saturated green, blue and orange light rings, and a soft glowing band round the waist, so it never flickers as a spinning triangle.
+
+Keys, while a Spinner is active (`?` lists the ones valid for the active style):
 
 | Input | Action |
 |---|---|
@@ -24,10 +26,12 @@ Keys, while it is active (`?` lists them):
 | `0` | Reset the orientation (the shortest way). Pressed again while face-on, it flips to the other side (the disc tumbles over, as if `t` were pressed until the other face shows); each further press flips again. The "Reset orientation" button in Settings only resets |
 | `Option` + drag | Rotate the disc freely (horizontal = yaw, vertical = pitch). While Option is held the window cannot be dragged, so the drag only rotates the disc |
 | `m` | Metal: steel, brass, copper, black zirconium, anodized titanium |
-| `c` | Hub finish: lit, raised or engraved (switches instantly) |
+| `Shift+m` | Tri-wing Spinner only: plate metal: same as body, then each of the five metals |
+| `c` | Disc Spinner only: hub finish: lit, raised or engraved (switches instantly) |
 | `b` | Music mode: off, sustain, kick, sustain + kick |
 | `u` | Bearing hum on / off |
-| `g` | Switch between the RealityKit renderer and the classic shader renderer |
+| `g` | Disc Spinner only: switch between the RealityKit renderer and the classic shader renderer |
+| `e` | Tri-wing edge lights on / off |
 
 Settings (default, range). Physics settings apply in both renderers; the Look and Shadow settings work in both renderers too.
 
@@ -38,8 +42,16 @@ Settings (default, range). Physics settings apply in both renderers; the Look an
 | Motion | Top speed | 60 rad/s | 20 to 120 | Speed limit |
 | Motion | Direction lock | on | on / off | On: an opposing push only brakes and cannot restart the disc the other way until a moment of quiet; off: it passes through zero and reverses |
 | Motion | Rotation step | 15 degrees | 5, 10, 15, 30, 45 | Size of one `t` / `y` key step |
-| Look | Metal | Steel | 5 metals | The disc's material (`m`) |
-| Look | Hub finish | Lit | Lit, Raised, Engraved | Marks cut in as glowing channels, standing proud, or laser-cut into the hub as dark matte channels with no glow (`c`). In RealityKit the marks are real geometry (a cut with a floor and walls, or a mark standing proud); the classic shader paints them. Engraved in the classic shader is a simpler dark channel with a wall shadow |
+| Look | Edge lights | on | on / off | Tri-wing Spinner only: the glowing tubes at the wing tips (`e`) |
+| Look | Light colours | original | original / follow palette | Tri-wing Spinner only: Original keeps the green, blue and orange wing lights; Follow palette takes the three wing colours from the current colour palette (`j` / `k` and Palette Cycle recolour them; the Color palette control under Appearance is live while this is on). Edge-light tubes, slot glow, side windows and spin-blur glow rings follow; the disc's rods and the classic shader do not |
+| Look | Lights follow the beat | off | on / off | Tri-wing Spinner with Edge lights on: the lights pulse on the music's beat (live audio only; Bluetooth output plays late, so the light can lead the sound) |
+| Look | Resting glow | 50% | 0 to 100% | Light level between beats, as a fraction of Glow brightness; with nothing playing for 2 s the lights ease up to full |
+| Look | Beat glow | 100% | 0 to 100% | Light level a beat reaches, as a fraction of Glow brightness (never below Resting glow) |
+| Look | Combination | Matched | Matched, Steel and brass, Steel and copper, Black and steel, Black and brass, Black and copper, Titanium and brass, Custom | Tri-wing Spinner only: favoured body / plate / boss metal pairings in one pick. Custom is shown (not selectable) when the three metal settings match none of them |
+| Look | Metal | Steel | 5 metals | The body material (`m`); on the Tri-wing the body and hub, and the plates and bosses while they follow it (gold, blue, steel parts keep their own) |
+| Look | Plate metal | Same as body | Same as body, 5 metals | Tri-wing Spinner only: the metal of the three wing plates (`Shift+m`); the ray finish is kept in every metal |
+| Look | Boss metal | Same as body | Same as body, Same as plate, 5 metals | Tri-wing Spinner only: the metal of the three raised bosses under the jewel settings |
+| Look | Hub finish | Lit | Lit, Raised, Engraved | Marks cut in as glowing channels, standing proud, or laser-cut into the hub as dark matte channels with no glow (`c`). In RealityKit the marks are real geometry (a cut with a floor and walls, or a mark standing proud); the classic shader paints them. Engraved in the classic shader is a simpler dark channel with a wall shadow. Disc Spinner only: not shown on the Tri-wing Spinner's panel |
 | Look | Glow brightness | 100% | 0 to 200% | Rods, motion arcs and lit hub marks; 0 turns the emission off |
 | Look | Room light | 100% | 30 to 160% | Lighting of the metal (not the glowing parts) |
 | Look | Size | 100% | 40 to 150% | Scales the disc |
@@ -89,7 +101,7 @@ Bare keys, active when the visualizer window or the Settings window is focused (
 | f | Toggle full screen |
 | ? | Show / hide the shortcut cheat sheet |
 
-The Spinner adds its own keys while it is the active visualization (see above).
+The Spinners add their own keys while one of them is the active visualization (see above).
 
 Mouse, in the visualizer window, with the **mouse control modifier** held (Shift by default; Off, Shift, Option or Command in Settings > Window): click = previous visualization, right-click = next, middle-click = random, scroll = change palette (scroll down = next). Without a modifier: right-click opens a menu (Settings, Lyrics Settings, Layout Settings, Acknowledgements, visualization / palette / song controls, lyrics, window border, full screen) and double-click toggles full screen (except on the track card, where a click brings the music player forward).
 
@@ -154,11 +166,11 @@ Songs with time-synced lyrics on LRCLIB (or in your local folder) are shown. Tra
 ```
 make build      # generates the Xcode project with XcodeGen, then builds a Debug app
 make run        # builds, then opens DerivedData/Build/Products/Debug/MacVisualizer.app
-make test       # runs the full XCTest suite (over 1,300 tests)
+make test       # runs the full XCTest suite (over 1,500 tests)
 make clean      # removes the generated project and DerivedData
 ```
 
-Requires macOS 14.4+, Xcode 16+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (for example `brew install xcodegen`). The Spinner visualization needs macOS 15+. CI runs `make build` then `make test` on GitHub's macos-15 runner with the latest stable Xcode. Debug builds are signed ad hoc ("Sign to Run Locally"), so no developer account is needed.
+Requires macOS 14.4+, Xcode 16+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (for example `brew install xcodegen`). The two Spinner visualizations need macOS 15+. CI runs `make build` then `make test` on GitHub's macos-15 runner with the latest stable Xcode. Debug builds are signed ad hoc ("Sign to Run Locally"), so no developer account is needed.
 
 ## First launch and permissions
 
@@ -168,7 +180,7 @@ Requires macOS 14.4+, Xcode 16+ and [XcodeGen](https://github.com/yonaskolb/Xcod
 - **Settings.** Open Settings with ⌘, (or the right-click menu). They are saved to `~/Library/Application Support/MacVisualizer/settings.json`, together with the lyrics cache and the Gemini key described above. The sidebar has a Global section (Styles & Presets, Palette Cycle, Post-FX, Analysis, Track Overlay, Lyrics, Layout, Window) and a section for the active visualization (Controls, Appearance, Glow, Bands).
 - **Window.** Window modes are under Settings > Window and the Window Chrome menu: transparency (per-pixel alpha, uniform opacity or opaque), borderless, click-through, always on top, and the window border (off, auto or always).
 
-Other command-line probes (run the same binary): `--render-probe <out.png> [style] [renderMode] [glow]` writes an offscreen PNG of a style (Spinner tokens, comma-separated as the render mode: `a<angle>`, `v<velocity>`, `m<metal index>`, `h<finish index>`, `p<pitchDeg>`, `y<yawDeg>`, `z<zoom>`, `t`, `g1`, `w<pixels>`, and the settings overrides `S<size>`, `G<glow>`, `L<room light>`, `B<spin blur>`, `D<shadow darkness>`, `P<shadow spread>`, `X<shadow distance>`, `K<backdrop gray>`), `--acknowledgements-probe <outdir>` (renders the Acknowledgements window content offscreen, each section in light and dark, to PNGs), `--audio-probe`, `--nowplaying-probe` and `--list-audio-processes`.
+Other command-line probes (run the same binary): `--render-probe <out.png> [style] [renderMode] [glow]` writes an offscreen PNG of a style (Spinner tokens, comma-separated as the render mode: `a<angle>`, `v<velocity>`, `m<metal index>`, `h<finish index>`, `p<pitchDeg>`, `y<yawDeg>`, `z<zoom>`, `t`, `g1`, `w<pixels>`, and the settings overrides `S<size>`, `G<glow>`, `L<room light>`, `B<spin blur>`, `D<shadow darkness>`, `P<shadow spread>`, `X<shadow distance>`, `K<backdrop gray>`, `d<model index>` (0 disc, 1 tri-wing; add `g1`; the style name `triWingSpinner` draws the Tri-wing Spinner with RealityKit forced) and `e<0|1>` (tri-wing edge lights off / on) and `l<0 to 1>` (forces the tri-wing light level)), `--acknowledgements-probe <outdir>` (renders the Acknowledgements window content offscreen, each section in light and dark, to PNGs), `--audio-probe`, `--nowplaying-probe` and `--list-audio-processes`.
 
 ## License
 

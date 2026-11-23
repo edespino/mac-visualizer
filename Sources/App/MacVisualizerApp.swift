@@ -404,7 +404,7 @@ struct ContentView: View {
                          replayNonce: nowPlaying.replayNonce)
             if model.cheatSheetVisible {
                 CheatSheetOverlay(mouseModifier: model.settings.mouseControlModifier,
-                                  showsSpinnerKeys: model.settings.visualizerStyle == .spinner,
+                                  spinnerStyle: model.settings.visualizerStyle.isSpinnerFamily ? model.settings.visualizerStyle : nil,
                                   spinnerStepDegrees: model.settings.spinnerSettings.rotationStepDegrees)
                     .transition(.opacity)
             }

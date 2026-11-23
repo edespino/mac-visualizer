@@ -10,11 +10,11 @@ A forward-looking backlog. Each open entry includes the source, scope, effort, a
 
 ---
 
-## Where we are today (0.2.0)
+## Where we are today (0.3.0)
 
 A highlights list, not an inventory — `CHANGELOG.md` is the record.
 
-- ✅ **25 visualizer styles:** Bars, Radial, Mirrored, Oscilloscope, Particles, Fountain, Fireworks, Ribbon Wave, Wireframe, Plasma, Bumpscope, Joy Plot, Heightfield, Voronoi, Lava Lamp, Beat Counter, Polartone, Octave Meatballs, Star Nest, Outrun the Rain, XY Scope, Iris, Tricentric, Musical Spectrum, Spinner — several with multiple render modes
+- ✅ **26 visualizer styles:** Bars, Radial, Mirrored, Oscilloscope, Particles, Fountain, Fireworks, Ribbon Wave, Wireframe, Plasma, Bumpscope, Joy Plot, Heightfield, Voronoi, Lava Lamp, Beat Counter, Polartone, Octave Meatballs, Star Nest, Outrun the Rain, XY Scope, Iris, Tricentric, Musical Spectrum, Disc Spinner, Tri-wing Spinner — several with multiple render modes
 - ✅ **14 palette presets**, HDR-boosted warm palettes on a full rgba16Float pipeline, palette cycling keys (`j`/`k`), and **palette auto-cycle** with crossfade (interval + fade duration)
 - ✅ Per-style profiles (`StyleProfile`), Demo Mode, bloom, trail persistence, vignette + film grain, kaleidoscope post-process, FFT window selector
 - ✅ Beat detection, stereo path, track ID plumbing (`AudioFrame`)
@@ -24,7 +24,7 @@ A highlights list, not an inventory — `CHANGELOG.md` is the record.
 - ✅ Window border, centering, and idle fade: window outline; position offset and Center below lyrics; idle fade with no music; settings undo/redo
 - ✅ Settings sidebar, hotkeys, app-wide migration, control relevance: Global vs per-visualization sidebar; keyboard shortcuts; track overlay / always-on-top / frame rate / position offset moved app-wide; irrelevant controls greyed out; window-position memory; smoother active-line scroll
 - ✅ Lyrics song-title header, transitions, audio-capture recovery, non-Spanish English detection: title + performer as the opening scrolling line; fades and cross-song crossfade; capture taps all target players, follows the default output device, and self-heals on route changes / Bluetooth clock stalls; English songs with a foreign section recognized as English
-- ✅ Spinner: a machined-metal two-sided disc spun with the scroll wheel; RealityKit renderer by default on macOS 15+ (classic shader renderer as stand-in, fallback and `g` alternative); pitch / yaw orientation with keys and Option-drag; lit, raised and engraved hub finishes (RealityKit hub marks are real geometry); `0` resets or flips the disc, rotation keys repeat while held; five metals (the anodized titanium film is shader-only); music-driven spin and a bearing hum that is silent whenever music is playing; every choice is a saved setting with a Settings panel. Limitations are listed in `CLAUDE.md` ("Spinner") and `CHANGELOG.md`
+- ✅ Spinners: two styles, the Disc Spinner and the Tri-wing Spinner (RealityKit only, macOS 15+), each with its own saved settings and a shared spin state. The Disc Spinner is a machined-metal two-sided disc spun with the scroll wheel; RealityKit renderer by default on macOS 15+ (classic shader renderer as stand-in, fallback and `g` alternative); pitch / yaw orientation with keys and Option-drag; lit, raised and engraved hub finishes (RealityKit hub marks are real geometry); `0` resets or flips the disc, rotation keys repeat while held; five metals (the anodized titanium film is shader-only); music-driven spin and a bearing hum that is silent whenever music is playing; every choice is a saved setting with a Settings panel. Limitations are listed in `CLAUDE.md` ("Spinner") and `CHANGELOG.md`
 - ✅ Acknowledgements window and About credits: Credits (`NOTICE`), Third-Party Licenses and License rendered in-app from the bundled files; `--acknowledgements-probe`
 - ✅ Audio capture lifecycle off the main thread with coalesced requests and a completion-driven, playback-gated watchdog with escalating backoff
 - ✅ Track overlay & window border: the track card enlarges on hover (crisp oversampled art, clamped to the window width), holds while hovered, carries a drop shadow, and re-blooms when a song restarts; clicking it brings the player forward and restores a minimized or closed window without tripping App Management; window border modes off / auto / always, where auto reveals the outline and shadow on a deliberate click and fades them when idle; a no-lyrics song's title scrolls off and the visualization recenters
@@ -205,7 +205,7 @@ Export MP4 / ProRes of the visualization *with* the system audio that drove it. 
 
 ### F5. More scenes via curated permissive Shadertoy ports ⬜ · low priority (the fidget-spinner axis)
 
-Phosphor ships ~150 scenes; we have 25. We have the pipeline (`ShaderKind` + the "add a fragment-shader visualizer" flow) and the licensing discipline. **Deliberately low priority**: breadth is the least sticky axis. Add a *few* high-impact looks, don't chase the count.
+Phosphor ships ~150 scenes; we have 26. We have the pipeline (`ShaderKind` + the "add a fragment-shader visualizer" flow) and the licensing discipline. **Deliberately low priority**: breadth is the least sticky axis. Add a *few* high-impact looks, don't chase the count.
 
 - **Where:** `Sources/Core/ShaderKind.swift`, `Sources/Rendering/Shaders.metal`, `VisualizerStyle` factory.
 - **Effort:** Medium / ongoing.

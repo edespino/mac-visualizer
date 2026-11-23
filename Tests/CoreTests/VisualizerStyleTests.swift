@@ -19,7 +19,7 @@ import XCTest
 final class VisualizerStyleTests: XCTestCase {
     func testAllCases() {
         XCTAssertEqual(VisualizerStyle.allCases,
-                       [.bars, .radial, .mirrored, .oscilloscope, .particles, .fountain, .fireworks, .ribbonWave, .wireframe, .plasma, .bumpscope, .joyPlot, .heightfield, .voronoi, .lavaLamp, .beatCounter, .polartone, .octaveMeatballs, .starNest, .outrunRain, .xyScope, .iris, .tricentric, .musicalSpectrum, .spinner])
+                       [.bars, .radial, .mirrored, .oscilloscope, .particles, .fountain, .fireworks, .ribbonWave, .wireframe, .plasma, .bumpscope, .joyPlot, .heightfield, .voronoi, .lavaLamp, .beatCounter, .polartone, .octaveMeatballs, .starNest, .outrunRain, .xyScope, .iris, .tricentric, .musicalSpectrum, .spinner, .triWingSpinner])
     }
 
     func testNextWrapsAround() {
@@ -33,14 +33,14 @@ final class VisualizerStyleTests: XCTestCase {
         XCTAssertEqual(VisualizerStyle.radial.previous, .bars)
         XCTAssertEqual(VisualizerStyle.fountain.previous, .particles)
         XCTAssertEqual(VisualizerStyle.fireworks.previous, .fountain)
-        XCTAssertEqual(VisualizerStyle.bars.previous, .spinner)
+        XCTAssertEqual(VisualizerStyle.bars.previous, .triWingSpinner)
     }
 
     /// Pins the positional ordering invariant new styles must maintain: cases
     /// are appended at the end, so the count and the final case move together.
-    func testCaseCountIsTwentyFiveAndSpinnerIsLast() {
-        XCTAssertEqual(VisualizerStyle.allCases.count, 25)
-        XCTAssertEqual(VisualizerStyle.allCases.last, .spinner)
+    func testCaseCountIsTwentySixAndTriWingSpinnerIsLast() {
+        XCTAssertEqual(VisualizerStyle.allCases.count, 26)
+        XCTAssertEqual(VisualizerStyle.allCases.last, .triWingSpinner)
     }
 
     func testSupportsPositionOffsetForCenteredGeometryStyles() {
@@ -48,7 +48,7 @@ final class VisualizerStyleTests: XCTestCase {
             .radial, .polartone, .iris, .tricentric, .xyScope,   // centered radial
             .heightfield, .wireframe,                            // centered 3D
             .oscilloscope, .ribbonWave, .joyPlot, .mirrored,      // centered on the mid-line (y=0)
-            .spinner,
+            .spinner, .triWingSpinner,
             .octaveMeatballs                                      // field shifts; uncovered window is discarded
         ]
         for style in VisualizerStyle.allCases {
@@ -75,13 +75,13 @@ final class VisualizerStyleTests: XCTestCase {
     func testRibbonWaveNextPreviousWrapping() {
         XCTAssertEqual(VisualizerStyle.fireworks.next, .ribbonWave)
         XCTAssertEqual(VisualizerStyle.ribbonWave.next, .wireframe)
-        XCTAssertEqual(VisualizerStyle.bars.previous, .spinner)
+        XCTAssertEqual(VisualizerStyle.bars.previous, .triWingSpinner)
         XCTAssertEqual(VisualizerStyle.ribbonWave.previous, .fireworks)
     }
 
     // (The former testWireframeCaseExistsAndIsLast duplicated the ordering
     // assertions above verbatim; two tests cannot share one honest name, so
-    // the invariant lives solely in testCaseCountIsTwentyFiveAndSpinnerIsLast.)
+    // the invariant lives solely in testCaseCountIsTwentySixAndTriWingSpinnerIsLast.)
 
     func testWireframeDisplayNameAndFactory() {
         XCTAssertEqual(VisualizerStyle.wireframe.displayName, "Wireframe")
@@ -92,7 +92,7 @@ final class VisualizerStyleTests: XCTestCase {
     func testWireframeNextPreviousWrapping() {
         XCTAssertEqual(VisualizerStyle.ribbonWave.next, .wireframe)
         XCTAssertEqual(VisualizerStyle.wireframe.next, .plasma)
-        XCTAssertEqual(VisualizerStyle.bars.previous, .spinner)
+        XCTAssertEqual(VisualizerStyle.bars.previous, .triWingSpinner)
         XCTAssertEqual(VisualizerStyle.wireframe.previous, .ribbonWave)
     }
 
@@ -129,9 +129,9 @@ final class VisualizerStyleTests: XCTestCase {
     }
 
     func testTricentricAndMusicalSpectrumAreLastTwoCases() {
-        XCTAssertEqual(VisualizerStyle.allCases.count, 25)
-        XCTAssertEqual(VisualizerStyle.allCases[VisualizerStyle.allCases.count - 2], .musicalSpectrum)
-        XCTAssertEqual(VisualizerStyle.allCases[VisualizerStyle.allCases.count - 3], .tricentric)
+        XCTAssertEqual(VisualizerStyle.allCases.count, 26)
+        XCTAssertEqual(VisualizerStyle.allCases[VisualizerStyle.allCases.count - 3], .musicalSpectrum)
+        XCTAssertEqual(VisualizerStyle.allCases[VisualizerStyle.allCases.count - 4], .tricentric)
     }
 
     func testShaderKindsForPlasmaAndBumpscope() {
@@ -151,7 +151,7 @@ final class VisualizerStyleTests: XCTestCase {
         XCTAssertEqual(VisualizerStyle.wireframe.next, .plasma)
         XCTAssertEqual(VisualizerStyle.plasma.next, .bumpscope)
         XCTAssertEqual(VisualizerStyle.bumpscope.next, .joyPlot)
-        XCTAssertEqual(VisualizerStyle.bars.previous, .spinner)
+        XCTAssertEqual(VisualizerStyle.bars.previous, .triWingSpinner)
         XCTAssertEqual(VisualizerStyle.plasma.previous, .wireframe)
         XCTAssertEqual(VisualizerStyle.bumpscope.previous, .plasma)
     }
@@ -255,7 +255,7 @@ final class VisualizerStyleTests: XCTestCase {
 
     func testUsesFrequencyBandsExcludesWaveformAndBeatOnlyStyles() {
         let noBands: Set<VisualizerStyle> =
-            [.plasma, .fireworks, .beatCounter, .oscilloscope, .polartone, .xyScope, .spinner]
+            [.plasma, .fireworks, .beatCounter, .oscilloscope, .polartone, .xyScope, .spinner, .triWingSpinner]
         for style in VisualizerStyle.allCases {
             XCTAssertEqual(style.usesFrequencyBands, !noBands.contains(style), "\(style)")
         }
@@ -273,7 +273,7 @@ final class VisualizerStyleTests: XCTestCase {
 
     func testUsesPaletteIsFalseOnlyForSpinner() {
         for style in VisualizerStyle.allCases {
-            XCTAssertEqual(style.usesPalette, style != .spinner, "\(style)")
+            XCTAssertEqual(style.usesPalette, !style.isSpinnerFamily, "\(style)")
         }
     }
 

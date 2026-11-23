@@ -2388,7 +2388,10 @@ extension VisualizerSettings: Codable {
         let pcFade     = try c.decodeIfPresent(Double.self, forKey: .paletteCycleFadeDuration) ?? d.paletteCycleFadeDuration
         let lyrics     = try c.decodeIfPresent(LyricsSettings.self, forKey: .lyrics) ?? d.lyrics
 
-        let profiles: [VisualizerStyle: StyleProfile]
+        var profiles: [VisualizerStyle: StyleProfile]
+        // Tri-wing Spinner migration inputs: whether the file carried a profile for it, and whether the Spinner's
+        // profile (the old home of the Model choice) selected the Tri-wing.
+        var presentStyles: Set<VisualizerStyle> = []
         if c.contains(.profiles), !(try c.decodeNil(forKey: .profiles)) {
             // New format. The enum-keyed dictionary persists as a flat
             // [key, value, key, value, ...] JSON array. PER-ENTRY problems
@@ -2416,6 +2419,7 @@ extension VisualizerSettings: Codable {
                     if let style = VisualizerStyle(rawValue: rawKey) {
                         merged[style] = seedOffset(env.profile, for: style,
                                                    hasX: env.presence.x, hasY: env.presence.y)
+                        presentStyles.insert(style)
                     }
                 } else if (try? nested.decode(JSONFragment.self)) == nil {
                     break // value unconsumable; stop rather than spin
@@ -2447,8 +2451,21 @@ extension VisualizerSettings: Codable {
             profiles = fresh
         }
 
+        // The Spinner became two styles. A file with no profile for the Tri-wing Spinner gets a COPY of the Spinner's
+        // profile (palette, offsets, Enabled, every Spinner setting), and when it was showing the Spinner with the
+        // old Model choice on Tri-wing, the Tri-wing Spinner becomes the active style. A file that already has the
+        // profile is left alone. Either way the stored `model` field is pinned to what each style draws.
+        var resolvedStyle: VisualizerStyle = style
+        if !presentStyles.contains(.triWingSpinner) {
+            let source: StyleProfile = profiles[.spinner] ?? StyleProfile.defaults(for: .spinner)
+            if style == .spinner && source.spinner.model == .triWing { resolvedStyle = .triWingSpinner }
+            profiles[.triWingSpinner] = source
+        }
+        profiles[.spinner]?.spinner.model = .disc
+        profiles[.triWingSpinner]?.spinner.model = .triWing
+
         self.init(
-            visualizerStyle: style,
+            visualizerStyle: resolvedStyle,
             profiles: profiles,
             demoModeEnabled: dme,
             ribbonWaveCount: swc,

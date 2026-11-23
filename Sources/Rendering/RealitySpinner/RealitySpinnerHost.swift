@@ -31,6 +31,8 @@ final class RealitySpinnerHost {
     var fadeSeconds: Double = 0.3
     private var lastMixTime: CFTimeInterval?
     private var impl: AnyObject?
+    /// Probe stills: build the Tri-wing's exact light level at once instead of showing a neighbouring level while the cache fills.
+    var exactLight: Bool = false
     /// Setup phase timings (name, milliseconds), for the probe and logs.
     private(set) var setupLog: [(String, Double)] = []
     private(set) var failure: String?
@@ -59,6 +61,7 @@ final class RealitySpinnerHost {
         let group = DispatchGroup()
         var geom: RKGeometryCPU?
         var images: RKImages?
+        var triWing: TWGeometryCPU?
         let frontMark: Int = SpinnerTuning.hubMark.index   // the marks are fixed: this one on the front hub, the other on the back
         let t0 = DispatchTime.now().uptimeNanoseconds
         group.enter()
@@ -71,6 +74,16 @@ final class RealitySpinnerHost {
                 for (name, ms) in g.hubTimings { self.setupLog.append(("CPU " + name + " (inside mesh arrays)", ms)) }
             }
             geom = g; group.leave()
+        }
+        group.enter()
+        DispatchQueue.global(qos: .userInitiated).async {
+            let tg = buildTriWingCPU()
+            let twNs: UInt64 = DispatchTime.now().uptimeNanoseconds - t0
+            DispatchQueue.main.async {
+                self.setupLog.append(("CPU tri-wing meshes (background, ends at)", Double(twNs) / 1e6))
+                for (name, ms) in tg.timings { self.setupLog.append(("CPU " + name, ms)) }
+            }
+            triWing = tg; group.leave()
         }
         group.enter()
         DispatchQueue.global(qos: .userInitiated).async {
@@ -92,7 +105,7 @@ final class RealitySpinnerHost {
                 do {
                     let r = try RealitySpinnerRenderer(device: device)
                     var t = DispatchTime.now().uptimeNanoseconds
-                    try await r.build(geometry: geom, images: images, lap: { (name: String) -> Void in
+                    try await r.build(geometry: geom, images: images, triWing: triWing, lap: { (name: String) -> Void in
                         let n: UInt64 = DispatchTime.now().uptimeNanoseconds
                         let stepMs: Double = Double(n - t) / 1e6
                         let label: String = name + " (main, async steps)"
@@ -109,7 +122,13 @@ final class RealitySpinnerHost {
         }
     }
 
-    private func fail(_ s: String) { failure = s; state = .failed }
+    private func fail(_ s: String) {
+        let first: Bool = state != .failed
+        failure = s
+        state = .failed
+        // Logged once per failure: the Tri-wing Spinner then draws the disc shader instead of staying blank.
+        if first { Log.spinnerRender.error("RealityKit Spinner unavailable (\(s, privacy: .public)); the Tri-wing Spinner falls back to the disc shader") }
+    }
 
     /// Probe helper: runs the CPU generation synchronously and pumps the main run loop until the RealityKit build is done.
     func prepareBlocking(device: MTLDevice, timeout: TimeInterval = 120) -> Bool {
@@ -149,10 +168,30 @@ final class RealitySpinnerHost {
         state == .ready && (wantRealityKit && (mix > 0 || true))
     }
 
+    /// Probe statistics: entities touched by the last level change and colour change, and light materials built so far.
+    var lightStatsText: String {
+        if #available(macOS 15.0, *), let r = impl as? RealitySpinnerRenderer {
+            return MainActor.assumeIsolated { r.lightStatsText }
+        }
+        return "no light stats"
+    }
+
+    /// Probe benchmark hook: when set, these raw wing colours (three) replace the palette-derived ones while the lights follow the palette.
+    var debugLightColors: [SIMD3<Float>]? = nil
+
+    /// The wing colours for the lights: nil (the original colours) unless the Tri-wing's lights follow the palette, else three
+    /// conditioned, quantised colours sampled from the effective `palette`.
+    func lightColours(_ sp: SpinnerSettings, _ palette: ColorPalette?) -> [SIMD3<Float>]? {
+        guard sp.model == .triWing, sp.edgeLights, sp.lightColors == .palette else { return nil }
+        if let d = debugLightColors { return TriWingLightColours.quantised(d.map { TriWingLightColours.condition($0) }) }
+        let pal: ColorPalette = palette ?? ColorPalette.fallback
+        return TriWingLightColours.quantised(TriWingLightColours.wingColours(from: pal))
+    }
+
     /// Per-frame render + hand-off into `descriptor`'s texture. `mix` from `updateMix`.
     func encode(spinner v: SpinnerVisualizer, settings sp: SpinnerSettings, width: Int, height: Int, transparent: Bool, background: SIMD3<Float>,
                 offsetX: Float, offsetY: Float, mix: Float, descriptor: MTLRenderPassDescriptor,
-                commandBuffer: MTLCommandBuffer, blur: MPSImageGaussianBlur) -> Bool {
+                commandBuffer: MTLCommandBuffer, blur: MPSImageGaussianBlur, palette: ColorPalette? = nil) -> Bool {
         guard #available(macOS 15.0, *), let r = impl as? RealitySpinnerRenderer, height > 0 else { return false }
         let aspect: Float = Float(width) / Float(height)
         let fullTurn: Double = 2 * Double.pi
@@ -167,14 +206,19 @@ final class RealitySpinnerHost {
             spinRad: Float(spinWrapped),
             omega: Float(v.physics.velocity),
             metal: sp.metal.index, hubFinish: sp.hubFinish.index,
+            plateMetal: sp.effectivePlateMetal.index, bossMetal: sp.effectiveBossMetal.index,
             zoom: zoomValue,
             width: width, height: height, transparent: transparent, background: background,
             offsetX: offsetX, offsetY: offsetY,
             hubRoll: Float(v.orientation.hubRoll),
             glow: Float(sp.glowBrightness), roomLight: Float(sp.roomLight), spinBlur: Float(sp.spinBlur),
             shadowDarkness: Float(sp.shadowDarkness), shadowSpread: Float(sp.shadowSpread),
-            shadowDistance: Float(sp.shadowDistance))
+            shadowDistance: Float(sp.shadowDistance),
+            model: sp.model.index, edgeLights: sp.edgeLights,
+            lightLevel: (sp.model == .triWing && sp.edgeLights) ? v.lightLevel : 1,
+            lightColors: lightColours(sp, palette))
         return MainActor.assumeIsolated {
+            r.exactLight = exactLight
             let ok = r.encodeFrame(params, mix: mix, descriptor: descriptor, commandBuffer: commandBuffer, blur: blur)
             if ok { lastEncodeMs = r.lastEncodeMs } else if let e = r.lastError { fail(e) }
             return ok

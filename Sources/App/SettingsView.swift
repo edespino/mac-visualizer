@@ -304,8 +304,8 @@ struct SettingsView: View {
                 styleFrameRatePicker
                 controls(for: model.settings.visualizerStyle)
             }
-            if model.settings.visualizerStyle == .spinner {
-                SpinnerSettingsSections(model: model)
+            if model.settings.visualizerStyle.isSpinnerFamily {
+                SpinnerSettingsSections(model: model, style: model.settings.visualizerStyle)
             }
         }
     }
@@ -535,7 +535,7 @@ struct SettingsView: View {
             }
             .help("Holding this key turns mouse actions into visualizer controls. Off disables only this; the keyboard shortcuts, right-click menu and double-click full screen stay.")
                 .resettable(\.mouseControlModifier, model)
-            Text("Hold the modifier: click = previous visualization, right-click = next, middle-click = random, scroll = change palette (down = next). With the Spinner active, Option+drag always rotates the disc; with Option as the modifier, a press that never moves still counts as the click. Press ? in the visualizer window for all shortcuts.")
+            Text("Hold the modifier: click = previous visualization, right-click = next, middle-click = random, scroll = change palette (down = next). With a spinner style active, Option+drag always rotates it; with Option as the modifier, a press that never moves still counts as the click. Press ? in the visualizer window for all shortcuts.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Toggle("Click-through (mouse events pass through to apps below)",
@@ -575,14 +575,19 @@ struct SettingsView: View {
     /// The style being edited (controls disable against its capability flags).
     private var activeStyle: VisualizerStyle { model.settings.visualizerStyle }
 
+    /// The Color palette control is live for styles that use the palette, and for the Tri-wing Spinner while its lights follow it.
+    private var paletteControlEnabled: Bool {
+        activeStyle.paletteControlEnabled(spinner: model.settings.spinnerSettings)
+    }
+
     @ViewBuilder private var appearanceCategory: some View {
         Section("Appearance") {
             Picker("Color palette", selection: bind(\.paletteName)) {
                 ForEach(palettes, id: \.self) { Text($0.capitalized).tag($0) }
             }
-                .disabled(!activeStyle.usesPalette)
-                .help(activeStyle.usesPalette ? ""
-                      : "\(activeStyle.displayName)'s colours come from its metal, so Palette has no effect on RealityKit and only a faint tint on the classic shader.")
+                .disabled(!paletteControlEnabled)
+                .help(paletteControlEnabled ? ""
+                      : "\(activeStyle.displayName)'s colours come from its metal, so Palette has no effect on RealityKit and only a faint tint on the classic shader. The Tri-wing's edge lights follow the palette when Light colours is set to Follow palette.")
                 .resettable(profile: \.paletteName, model)
             Slider(value: bind(\.gain), in: 0.5...4) {
                 Text("Gain")

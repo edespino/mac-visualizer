@@ -148,6 +148,7 @@ public struct StyleProfile: Codable, Equatable {
     public static func defaults(for style: VisualizerStyle) -> StyleProfile {
         var p = StyleProfile.defaults
         if style == .wireframe { p.positionOffsetY = -0.07 }
+        if style == .triWingSpinner { p.spinner.model = .triWing }
         return p
     }
 }

@@ -164,6 +164,8 @@ final class RenderModel: ObservableObject {
                     let pulse = self.lyricFollower.update(bassEnergy: frame.bassEnergy,
                                                           timestamp: CACurrentMediaTime())
                     if pulse > 0 {
+                        // The Spinner's beat-driven lights read the same pulse (lock-protected hand-over to the draw loop).
+                        SpinnerLightInbox.shared.post(pulse, at: ProcessInfo.processInfo.systemUptime)
                         DispatchQueue.main.async { [weak self] in self?.lyricPulse.send(pulse) }
                     }
                 }
@@ -309,16 +311,21 @@ final class RenderModel: ObservableObject {
     //
     // The Spinner's choices are persisted per-style settings (`StyleProfile.spinner`). The bare keys write them through
     // the same `settings` publisher as the Settings controls, so persistence, the modified/reset affordance and undo
-    // all apply. They act on the Spinner's profile only while the Spinner is the active style.
+    // all apply. They act on the active spinner style's own profile, and only while a spinner style is active.
 
     private func mutateSpinner(_ body: (inout SpinnerSettings) -> Void) {
-        guard settings.visualizerStyle == .spinner else { return }
+        guard settings.visualizerStyle.isSpinnerFamily else { return }
         settings.mutateCurrent { (profile: inout StyleProfile) -> Void in body(&profile.spinner) }
     }
 
     /// Key `m`: next metal.
     func cycleSpinnerMetal() {
         mutateSpinner { (s: inout SpinnerSettings) -> Void in s.metal = s.metal.next }
+    }
+
+    /// Key Shift+`m`: next plate metal (same as body, then the five metals, wrapping).
+    func cycleSpinnerPlateMetal() {
+        mutateSpinner { (s: inout SpinnerSettings) -> Void in s.plateMetal = s.plateMetal.next }
     }
 
     /// Key `c`: next hub finish.
@@ -339,6 +346,11 @@ final class RenderModel: ObservableObject {
     /// Key `g`: shader <-> RealityKit.
     func cycleSpinnerRenderer() {
         mutateSpinner { (s: inout SpinnerSettings) -> Void in s.renderer = s.renderer.next }
+    }
+
+    /// Key `e`: tri-wing edge lights on/off.
+    func toggleSpinnerEdgeLights() {
+        mutateSpinner { (s: inout SpinnerSettings) -> Void in s.edgeLights.toggle() }
     }
 
     /// Key `0` and the Settings "Reset orientation" button: eases pitch and yaw back to face-on.
